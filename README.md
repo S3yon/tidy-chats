@@ -74,14 +74,16 @@ State lives in the plugin data folder (`${CLAUDE_PLUGIN_DATA}`); `TIDY_CHATS_DAT
 `keeper.py debug on` saves samples of the sidebar tool calls to `samples/` there.
 
 ## Status
-v0.1.5: running live in the desktop app since 2026-11-16. Seen working in real chats: the
+v0.1.6: running live in the desktop app since 2026-11-16. Seen working in real chats: the
 first-turn and pick-up notes (a pick-up renamed the old chat `done: `, unpinned it, detached,
 filed and pinned itself before its first reply), the finish steps, and a sweep from a Stop
 (107 chats checked: 1 archived, 1 unpinned). The live run found three bugs, each fixed
 test-first: an over-size chat list (0.1.1), turns the app started reopening done chats (0.1.2),
 and a sweep unpinning a hand-off whose pick-up card was still unclicked (0.1.3). 0.1.4 pins any
 chat you write in; 0.1.5 fixes the code review's smaller findings (locks, parallel hooks,
-declined calls, rule ideas) and logs the options each sweep planned with.
+declined calls, rule ideas) and logs the options each sweep planned with. 0.1.6: a finished pick-up chat
+no longer gets a false "steps missed" note at its last turn, which had used up the turn a
+sweep was due on.
 
 ## License
 MIT
