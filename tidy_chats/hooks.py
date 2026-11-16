@@ -19,6 +19,9 @@ AUTOMATED = re.compile(r"\A\s*(?:[^<\n]{0,80}\n\s*)?<(?:cross-session-message|si
                        r"ci-monitor-event|task-notification)\b")
 # A first prompt that picks up another chat's work: names a handoff, or a line starts "Pick up".
 PICKUP = re.compile(r"(?im)(\bhand(?:ed)?[- ]?offs?\b|^\W*pick up\b)")
+# A sidebar call the app or the user turned down: nothing changed, so nothing is recorded.
+DECLINED = re.compile(r"\b(?:declin|denied|refus|not renamed|not pinned|not moved|cancel|fail|error)",
+                      re.I)
 
 
 def handle(event, payload, env, now):
@@ -194,6 +197,8 @@ def _post_tool(cid, payload, env, now):
     st = state.load_chat(cid)
     before = dict(st)
     out = {}
+    if short in ("set_session_title", "set_pinned", "move_sessions") and _declined(resp):
+        short = "declined"
     if short == "wrap_up":
         st["saw_wrap_up"] = True
         st["wrapped_turn"] = True
@@ -260,6 +265,11 @@ def _post_tool(cid, payload, env, now):
         out = _plan_swap(cid, inp, resp, env, now, st.get("parent"))
     state.merge_chat(cid, before, st)
     return out
+
+
+def _declined(resp):
+    """The call was turned down. Quoted text (a title like "Fix the login failure") is ignored."""
+    return bool(DECLINED.search(re.sub(r'"[^"]*"', "", _text(resp))))
 
 
 def _full_list_limit(inp):

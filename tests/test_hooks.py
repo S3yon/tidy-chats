@@ -655,3 +655,21 @@ def test_parallel_tool_calls_keep_each_others_flags(monkeypatch):
     monkeypatch.setattr(state, "load_chat", real)
     st = state.load_chat(ME)
     assert st["pinned"] is True and st["filed"] is True
+
+
+def test_declined_rename_changes_nothing():
+    settle_first_turn()
+    tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": "self", "title": "done: X"},
+         "The user declined the new title; the session keeps its current title.")
+    assert not state.load_chat(ME).get("done")
+    assert not [e for e in state.read_log() if e["action"].startswith("rename")]
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": OTHER, "pinned": False},
+         "The user declined this change.")
+    assert not [e for e in state.read_log() if e["target"] == OTHER]
+
+
+def test_a_title_that_mentions_failure_still_counts_as_renamed():
+    settle_first_turn()
+    tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": "self", "title": "done: Fix login failure"},
+         [{"type": "text", "text": 'Renamed this session to "done: Fix login failure" (was "Fix login failure").'}])
+    assert state.load_chat(ME)["done"] is True
