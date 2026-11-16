@@ -244,6 +244,21 @@ def test_stop_skips_sweep_when_waiting():
     assert state.sweep_state()["lock"] is None
 
 
+def test_stop_skips_sweep_after_question_without_wrap_up():
+    settle_first_turn()
+    assert stop(last="Which one do you want?") == {}
+    assert state.sweep_state()["lock"] is None
+    assert state.load_chat(ME)["waiting"] is True
+
+
+def test_wrap_up_flag_lasts_one_turn():
+    settle_first_turn()
+    tool(WRAP, {"recap": "r"})
+    run("UserPromptSubmit", {"prompt": "quick question"})
+    assert stop(last="Want the long version?") == {}
+    assert state.sweep_state()["lock"] is None
+
+
 def test_stop_skips_big_transcript_unless_overdue(tmp_path):
     settle_first_turn()
     big = tmp_path / "t.jsonl"

@@ -63,7 +63,8 @@ def _prompt(cid, payload, now):
         state.save_chat(cid, {"seen": 1, "started_at": now})
         return _ctx("UserPromptSubmit", notes.first_turn_note(_section_hints(payload.get("cwd") or "")))
     reopened = bool(st.get("done"))
-    st.update({"finished": False, "waiting": False, "completed": False, "finish_reminded": False})
+    st.update({"finished": False, "waiting": False, "completed": False, "finish_reminded": False,
+               "wrapped_turn": False})
     if reopened:
         st["done"] = False
     state.save_chat(cid, st)
@@ -139,6 +140,7 @@ def _post_tool(cid, payload, env, now):
     out = {}
     if short == "wrap_up":
         st["saw_wrap_up"] = True
+        st["wrapped_turn"] = True
         if str(inp.get("ask") or "").strip() or inp.get("blocked"):
             st.update({"finished": False, "waiting": True})
         else:
@@ -273,11 +275,11 @@ def _stop(cid, payload, env, now):
         return {}
 
     st = state.load_chat(cid)
-    if not st.get("saw_wrap_up") and not config.has_wrap_up(env):
+    if not st.get("wrapped_turn"):  # no wrap_up this turn: read the last message
         last = str(payload.get("last_assistant_message") or "").rstrip()
         if last.endswith("?"):
             st.update({"finished": False, "waiting": True})
-        elif last:
+        elif last and not st.get("saw_wrap_up") and not config.has_wrap_up(env):
             st.update({"finished": True, "waiting": False})
 
     note = None
