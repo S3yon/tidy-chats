@@ -34,7 +34,7 @@ Every hook returns valid output even on error, so a broken install never blocks 
 Needs Python 3.9+ on `PATH` as `python3`.
 
 ```bash
-claude plugin marketplace add <path or git URL of this repo>
+claude plugin marketplace add S3yon/tidy-chats
 ```
 
 ```bash
