@@ -102,3 +102,10 @@ def test_render_plan_says_when_list_hit_its_limit():
     text = notes.render_plan(empty_plan(truncated=200), archive_mode="auto", ideas_waiting=0, now=NOW)
     assert "limit of 200" in text
     assert "limit" not in notes.render_plan(empty_plan(), archive_mode="auto", ideas_waiting=0, now=NOW)
+
+
+def test_finish_notes_keep_pin_drop_the_unpin_step():
+    assert "set_pinned" in notes.finish_note() and "set_pinned" in notes.missed_note("finish")
+    for text in (notes.finish_note(keep_pin=True), notes.missed_note("finish", keep_pin=True)):
+        assert "set_pinned" not in text
+        assert "mark_completed" in text and "done: " in text

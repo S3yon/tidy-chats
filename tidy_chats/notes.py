@@ -34,14 +34,20 @@ def first_turn_note(section_hints):
     return text
 
 
-def finish_note():
+def _finish_tools(keep_pin):
+    if keep_pin:  # the user's keep_pinned rule: no unpin step
+        return ("", _load(_SESSION + "set_session_title", _SIDEBAR + "mark_completed"))
+    return ("set_pinned \"self\" false, ",
+            _load(_SESSION + "set_session_title", _SIDEBAR + "set_pinned", _SIDEBAR + "mark_completed"))
+
+
+def finish_note(keep_pin=False):
+    unpin, load = _finish_tools(keep_pin)
     return (
         "tidy-chats: this turn finished with nothing waiting on the user. Before your closing "
         "message: set_session_title \"self\" to \"done: \" plus the current title (skip if it "
-        "already starts with \"done: \" or \"handed off: \"), set_pinned \"self\" false, then "
-        "mark_completed \"self\". "
-        + _load(_SESSION + "set_session_title", _SIDEBAR + "set_pinned", _SIDEBAR + "mark_completed")
-        + " Don't mention this upkeep in your reply."
+        "already starts with \"done: \" or \"handed off: \"), " + unpin + "then "
+        "mark_completed \"self\". " + load + " Don't mention this upkeep in your reply."
     )
 
 
@@ -56,12 +62,11 @@ def reopen_note():
     )
 
 
-def missed_note(step):
+def missed_note(step, keep_pin=False):
     if step == "finish":
+        unpin, load = _finish_tools(keep_pin)
         body = ("this chat finished but its done steps were not seen: set_session_title \"self\" "
-                "to \"done: \" plus the title, set_pinned \"self\" false, mark_completed \"self\". "
-                + _load(_SESSION + "set_session_title", _SIDEBAR + "set_pinned",
-                        _SIDEBAR + "mark_completed"))
+                "to \"done: \" plus the title, " + unpin + "mark_completed \"self\". " + load)
     else:
         body = ("this chat is not in a sidebar section yet: move_sessions [\"self\"] into the "
                 "closest existing section (list_sections), then set_pinned \"self\" true. Skip "

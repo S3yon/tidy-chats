@@ -124,6 +124,33 @@ def test_wrap_up_without_ask_gives_finish_note():
     assert state.load_chat(ME)["finished"] is True
 
 
+def test_keep_pinned_rule_respected_at_finish():
+    state.save_rules([{"kind": "keep_pinned", "match": "title_word", "value": "atlas"}])
+    settle_first_turn()
+    resp = json.dumps({"sessionId": ME, "title": "Atlas v14 pace", "group": {"id": "cg-1", "name": "S"}})
+    tool("mcp__ccd_session_mgmt__get_session", {"session_id": "self"}, resp)
+    note = ctx(tool(WRAP, {"recap": "Built it."}))
+    assert "done: " in note and "set_pinned" not in note
+
+
+def test_keep_pinned_rule_by_session_and_folder_at_missed_finish():
+    state_sweep_recent()
+    state.save_rules([{"kind": "keep_pinned", "match": "cwd", "value": "/Users/u/kb"}])
+    settle_first_turn()
+    tool(WRAP, {"recap": "r"})
+    note = ctx(stop())
+    assert "mark_completed" in note and "set_pinned" not in note
+    state.save_rules([{"kind": "keep_pinned", "match": "session", "value": ME}])
+    run("UserPromptSubmit", {"prompt": "more", "cwd": "/elsewhere"})
+    assert "set_pinned" not in ctx(tool(WRAP, {"recap": "r"}))
+
+
+def test_title_kept_from_rename():
+    settle_first_turn()
+    tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": "self", "title": "Atlas v15"})
+    assert state.load_chat(ME)["title"] == "Atlas v15"
+
+
 def test_wrap_up_with_ask_marks_waiting():
     settle_first_turn()
     assert tool(WRAP, {"recap": "r", "ask": "Ship it?"}) == {}

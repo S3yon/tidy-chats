@@ -146,12 +146,13 @@ def _post_tool(cid, payload, env, now):
         else:
             st.update({"finished": True, "waiting": False})
             if not st.get("done"):
-                out = _ctx("PostToolUse", notes.finish_note())
+                out = _ctx("PostToolUse", notes.finish_note(_keep_pin(cid, st, payload)))
     elif short == "set_session_title":
         t = target(inp.get("session_id"))
         done = planner.is_finished_title(inp.get("title"))
         if t == cid:
             st["done"] = done
+            st["title"] = inp.get("title")
         state.log_action({"action": "rename_done" if done else "rename", "target": t, "chat": cid})
     elif short == "set_pinned":
         t = target(inp.get("session_id"))
@@ -187,6 +188,8 @@ def _post_tool(cid, payload, env, now):
                 st["nested"] = bool(info.get("parentSessionId")) and not info.get("detached")
                 st["parent"] = info.get("parentSessionId") if st["nested"] else None
                 st["pinned"] = bool(info.get("pinned"))
+                if isinstance(info.get("title"), str):
+                    st["title"] = info["title"]
     elif short == "list_sessions":
         out = _plan_swap(cid, inp, resp, env, now, st.get("parent"))
     state.save_chat(cid, st)
@@ -201,6 +204,13 @@ def _full_list_limit(inp):
     if isinstance(limit, bool) or not isinstance(limit, (int, float)) or limit < FULL_LIST:
         return None
     return int(limit)
+
+
+def _keep_pin(cid, st, payload):
+    """True when an approved keep_pinned rule matches this chat."""
+    chat = {"sessionId": cid, "cwd": payload.get("cwd") or "", "title": st.get("title") or ""}
+    return any(r.get("kind") == "keep_pinned" and planner.rule_matches(r, chat)
+               for r in state.load_rules())
 
 
 def _plan_swap(cid, inp, resp, env, now, parent=None):
@@ -285,7 +295,7 @@ def _stop(cid, payload, env, now):
     note = None
     if st.get("finished") and not (st.get("done") or st.get("completed")) and not st.get("finish_reminded"):
         st["finish_reminded"] = True
-        note = notes.missed_note("finish")
+        note = notes.missed_note("finish", _keep_pin(cid, st, payload))
     elif (st.get("seen") and not st.get("filed") and not st.get("nested")
           and not st.get("first_turn_reminded")):
         st["first_turn_reminded"] = True
