@@ -67,6 +67,22 @@ def _section_hints(cwd):
     return (folder + words)[:MAX_HINTS]
 
 
+def _keep_pinned():
+    """Plain descriptions of the user's keep_pinned rules, for the pick-up notes."""
+    out = []
+    for r in state.load_rules():
+        value = str(r.get("value") or "")
+        if r.get("kind") != "keep_pinned" or not value:
+            continue
+        if r.get("match") == "session":
+            out.append(value[:14])  # "local_" + 8 hex: enough to match parentSessionId
+        elif r.get("match") == "title_word":
+            out.append('titles with "%s"' % value)
+        elif r.get("match") == "cwd":
+            out.append("folder " + value)
+    return out
+
+
 def _prompt(cid, payload, now):
     st = state.load_chat(cid)
     automated = bool(AUTOMATED.match(str(payload.get("prompt") or "")))
@@ -76,7 +92,8 @@ def _prompt(cid, payload, now):
         pickup = bool(PICKUP.search(str(payload.get("prompt") or "")))
         state.save_chat(cid, {"seen": 1, "started_at": now, "pickup": pickup, "noted": True})
         hints = _section_hints(payload.get("cwd") or "")
-        return _ctx("UserPromptSubmit", notes.pickup_note(hints) if pickup else notes.first_turn_note(hints))
+        return _ctx("UserPromptSubmit", notes.pickup_note(hints, _keep_pinned()) if pickup
+                    else notes.first_turn_note(hints))
     st.update({"finished": False, "waiting": False, "completed": False, "finish_reminded": False,
                "wrapped_turn": False, "handed_off": False, "pin_asked": False, "noted": False})
     note = None
@@ -409,7 +426,7 @@ def _stop(cid, payload, env, now):
           and (st.get("nested") is not False or not st.get("pinned"))):
         st["pickup_reminded"] = True
         st["first_turn_reminded"] = True  # the pick-up reminder covers filing too
-        note = notes.missed_note("pickup")
+        note = notes.missed_note("pickup", keep=_keep_pinned())
     elif (st.get("seen") and not st.get("filed") and not st.get("nested")
           and not st.get("first_turn_reminded")):
         st["first_turn_reminded"] = True

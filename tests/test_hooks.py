@@ -689,3 +689,10 @@ def test_section_hints_put_folder_matches_first():
                       {"kind": "section", "match": "cwd", "value": "/Users/u/kb", "section": "System"}])
     note = ctx(run("UserPromptSubmit", {"cwd": "/Users/u/kb/sub"}))
     assert note.index("System") < note.index("Games")
+
+
+def test_pickup_note_spares_a_chat_the_user_keeps_pinned():
+    state.save_rules([{"kind": "keep_pinned", "match": "session", "value": "local_old"},
+                      {"kind": "keep_pinned", "match": "title_word", "value": "deck"}])
+    note = ctx(run("UserPromptSubmit", {"prompt": PICKUP_PROMPT}))
+    assert "local_old" in note and '"deck"' in note and len(note) < 900

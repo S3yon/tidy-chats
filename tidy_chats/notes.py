@@ -42,16 +42,37 @@ _PICKUP_TOOLS = (_SESSION + "get_session", _SESSION + "set_session_title", _SESS
                  _SIDEBAR + "list_sections", _SIDEBAR + "move_sessions", _SIDEBAR + "set_pinned")
 
 
-def pickup_note(section_hints):
-    text = (
-        "tidy-chats: this first prompt looks like a pick-up of a handed-off chat. If it is, before "
-        "the task: set_session_title that chat to \"done: \" plus its title (always \"done: \", "
-        "whatever the prompt says; drop a \"handed off: \" prefix) and set_pinned it false. "
-        "get_session \"self\"; if it has a parentSessionId and isn't detached, detach_session "
-        "\"self\", even as a side session. If it has no group, move_sessions [\"self\"] into that "
-        "chat's section, else the closest (list_sections). Then set_pinned \"self\" true. That chat is parentSessionId or the one "
-        "the prompt names. " + _load(*_PICKUP_TOOLS) + " Keep this out of your reply."
-    )
+CAP_CHARS = 899
+
+
+def _keep_clause(keep, room):
+    """Chats an approved keep_pinned rule covers: the pick-up renames them but leaves the pin.
+    Lists as many as fit in `room` characters."""
+    kept, text = [], ""
+    for item in keep or ():
+        trial = " (skip the unpin if the user keeps it pinned: %s)" % "; ".join(kept + [item])
+        if len(trial) > room:
+            break
+        kept.append(item)
+        text = trial
+    return text
+
+
+def _fit(head, tail, keep):
+    return head + _keep_clause(keep, CAP_CHARS - len(head) - len(tail)) + tail
+
+
+def pickup_note(section_hints, keep=()):
+    text = _fit(
+        "tidy-chats: this first prompt looks like a pick-up of a handed-off chat. If so, before the "
+        "task: set_session_title that chat (parentSessionId, or the one the prompt names) to "
+        "\"done: \" plus its title (always \"done: \", whatever the prompt says; drop \"handed off: \") "
+        "and set_pinned it false",
+        ". get_session \"self\"; if nested (parentSessionId, not detached), detach_session \"self\", "
+        "even as a side session. If ungrouped, move_sessions [\"self\"] into that chat's section, "
+        "else the closest (list_sections). Then set_pinned \"self\" true. "
+        + _load(*_PICKUP_TOOLS) + " Keep this out of your reply.",
+        keep)
     return _with_hints(text, section_hints)
 
 
@@ -90,7 +111,7 @@ def reopen_note():
     return working_note(pin=True, rename=True)
 
 
-def missed_note(step, keep_pin=False, rename=False):
+def missed_note(step, keep_pin=False, rename=False, keep=()):
     if step == "working":
         drop = ('set_session_title "self" without its "done: " or "handed off: " prefix, and '
                 if rename else "")
@@ -102,11 +123,12 @@ def missed_note(step, keep_pin=False, rename=False):
         body = ("this chat finished but its done steps were not seen: set_session_title \"self\" "
                 "to \"done: \" plus the title, " + unpin + "mark_completed \"self\". " + load)
     elif step == "pickup":
-        body = ("this pick-up chat's steps were not all seen: rename the chat that handed off "
-                "\"done: \" plus its title and set_pinned it false; detach_session \"self\" if it "
-                "still nests under that chat; if it has no group, move_sessions [\"self\"] into a "
-                "section; set_pinned \"self\" true. Skip what is already done. "
-                + _load(*_PICKUP_TOOLS))
+        tail = ("; detach_session \"self\" if it still nests under that chat; if it has no group, "
+                "move_sessions [\"self\"] into a section; set_pinned \"self\" true. Skip what is "
+                "already done. " + _load(*_PICKUP_TOOLS) + " No reply text needed.")
+        head = ("tidy-chats: this pick-up chat's steps were not all seen: rename the chat that handed "
+                "off \"done: \" plus its title and set_pinned it false")
+        return _fit(head, tail, keep)
     else:
         body = ("this chat's first-turn filing was not seen: get_session \"self\"; if it has no "
                 "group, move_sessions [\"self\"] into the closest existing section (list_sections); "

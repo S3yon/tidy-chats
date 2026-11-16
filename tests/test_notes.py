@@ -136,3 +136,15 @@ def test_working_note_asks_only_for_what_is_missing():
     only_rename = notes.working_note(pin=False, rename=True)
     assert "set_pinned" not in only_rename and "set_session_title" in only_rename
     assert 'set_pinned "self" true' in notes.missed_note("working")
+
+
+def test_pickup_notes_name_chats_the_user_keeps_pinned():
+    keep = ["local_old", 'titles with "deck"']
+    for t in (notes.pickup_note([], keep), notes.missed_note("pickup", keep=keep)):
+        assert "local_old" in t and 'titles with "deck"' in t and len(t) < 900
+    assert "keeps pinned" not in notes.pickup_note([])
+
+
+def test_pickup_note_keep_list_stays_under_the_cap():
+    t = notes.pickup_note(["Website (folder /Users/u/site)"] * 3, ["local_%032d" % i for i in range(20)])
+    assert len(t) < 900
