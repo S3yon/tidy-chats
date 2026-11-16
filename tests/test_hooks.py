@@ -434,6 +434,34 @@ def test_list_at_its_limit_holds_archives():
     assert "limit" in text
 
 
+def oversize_error(path):
+    return ("Error: result (57,464 characters across 1,591 lines) exceeds maximum allowed tokens. "
+            "Output has been saved to %s.\nFormat: Plain text\n- For targeted searches: use grep." % path)
+
+
+def test_oversized_list_planned_from_the_saved_file(tmp_path):
+    settle_first_turn()
+    stop()  # takes the lock
+    home = tmp_path / "cfg"
+    saved = home / "projects" / "-w" / "abc" / "tool-results" / "mcp-ccd_session_mgmt-list_sessions-1.txt"
+    saved.parent.mkdir(parents=True)
+    saved.write_text(sessions_json())
+    out = tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200}, oversize_error(saved),
+               CLAUDE_CONFIG_DIR=str(home))
+    text = out["hookSpecificOutput"]["updatedMCPToolOutput"]
+    assert "local_old" in text and "archive_session" in text and "Error" not in text
+
+
+def test_oversized_list_outside_config_dir_ignored(tmp_path):
+    settle_first_turn()
+    stop()
+    stray = tmp_path / "elsewhere" / "tool-results" / "mcp-ccd_session_mgmt-list_sessions-1.txt"
+    stray.parent.mkdir(parents=True)
+    stray.write_text(sessions_json())
+    assert tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200}, oversize_error(stray),
+                CLAUDE_CONFIG_DIR=str(tmp_path / "cfg")) == {}
+
+
 def test_list_sessions_unparseable_passes_through():
     settle_first_turn()
     stop()

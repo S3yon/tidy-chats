@@ -5,6 +5,7 @@ import re
 import time
 import traceback
 from datetime import datetime, timezone
+from pathlib import Path
 
 from . import config, notes, planner, state
 
@@ -222,6 +223,28 @@ def _keep_pin(cid, st, payload):
                for r in state.load_rules())
 
 
+SAVED = re.compile(r"saved to (/\S+?\.txt)")
+SAVED_MAX = 8 * 1024 * 1024
+
+
+def _saved_list(resp, env):
+    """An over-size list_sessions result: the app saves it to a file and returns an error naming it."""
+    m = SAVED.search(_text(resp))
+    if not m:
+        return None
+    root = Path(env.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude").resolve() / "projects"
+    path = Path(m.group(1)).resolve()
+    if (root not in path.parents or path.parent.name != "tool-results"
+            or not path.name.startswith("mcp-ccd_session_mgmt-list_sessions")):
+        return None
+    try:
+        if path.stat().st_size > SAVED_MAX:
+            return None
+        return planner.parse_sessions(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
 def _plan_swap(cid, inp, resp, env, now, parent=None):
     lock = state.sweep_state()["lock"]
     if not lock or lock.get("holder") != cid:
@@ -230,6 +253,8 @@ def _plan_swap(cid, inp, resp, env, now, parent=None):
     if limit is None:
         return {}
     sessions = planner.parse_sessions(resp)
+    if sessions is None:
+        sessions = _saved_list(resp, env)
     if sessions is None:
         return {}
     opts = config.options(env)
