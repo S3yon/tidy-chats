@@ -163,8 +163,9 @@ def make_plan(sessions, *, now, self_id, rules, log, opts, self_parent=None):
                for sid, c in by_id.items()
                if sid in chosen and not (_nested(c) and c["startedBy"] in chosen)]
 
+    kept = _kept_pins(log or [])
     unpin = [{"id": sid, "title": c.get("title") or ""} for sid, c in by_id.items()
-             if c.get("pinned") and sid != self_id and not c.get("isRunning")
+             if c.get("pinned") and sid != self_id and not c.get("isRunning") and sid not in kept
              and is_finished_title(c.get("title")) and not _any_rule(rules, "keep_pinned", c)]
 
     file_ = []
@@ -190,6 +191,25 @@ def make_plan(sessions, *, now, self_id, rules, log, opts, self_parent=None):
 
     return {"archive": archive, "unpin": unpin, "file": file_, "sections": sections,
             "overrides": find_overrides(by_id, log or []), "checked": len(live)}
+
+
+def _kept_pins(log):
+    """Chats whose pin the sweep leaves alone: a hand-off until its pick-up unpins it (its card
+    lives there), and a pin made after the chat's done rename (a deliberate keep)."""
+    done, kept = set(), set()
+    for e in log:
+        if not isinstance(e, dict) or not e.get("target"):
+            continue
+        t, action = e["target"], e.get("action")
+        if action == "rename_done":
+            done.add(t)
+        elif action == "rename":
+            done.discard(t)
+        elif action == "handoff" or (action == "pin" and t in done):
+            kept.add(t)
+        elif action in ("unpin", "archive"):
+            kept.discard(t)
+    return kept
 
 
 def find_overrides(by_id, log):

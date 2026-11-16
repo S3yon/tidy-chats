@@ -163,6 +163,7 @@ def _post_tool(cid, payload, env, now):
         # Handing off: the chat keeps its pin until the pick-up chat unpins it (KB rule 2026-10-21).
         if str(inp.get("title") or "").strip().lower().startswith("pick up"):
             st["handed_off"] = True
+            state.log_action({"action": "handoff", "target": cid, "chat": cid})
     elif short == "set_session_title":
         t = target(inp.get("session_id"))
         done = planner.is_finished_title(inp.get("title"))

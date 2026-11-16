@@ -286,6 +286,13 @@ def test_handing_off_chat_keeps_its_pin():
     assert stop() == {}
 
 
+def test_handing_off_is_logged_for_the_sweep():
+    settle_first_turn()
+    tool("mcp__ccd_session__start_session", {"title": "Pick up: tidy-chats", "prompt": "p"})
+    tool("mcp__ccd_session__start_session", {"title": "Fix the flaky test", "prompt": "p"})
+    assert [e["target"] for e in state.read_log() if e["action"] == "handoff"] == [ME]
+
+
 def test_handed_off_flag_lasts_one_turn():
     state_sweep_recent()
     settle_first_turn()

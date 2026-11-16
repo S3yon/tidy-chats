@@ -141,6 +141,27 @@ def test_unpin_finished_pinned_and_keep_pinned_rule():
     assert [u["id"] for u in plan(sessions, rules)["unpin"]] == ["a"]
 
 
+def test_hand_off_keeps_its_pin_until_the_pickup_unpins_it():
+    sessions = [chat("h", "handed off: y", pinned=True)]
+    log = [{"action": "pin", "target": "h", "at": 1.0},
+           {"action": "handoff", "target": "h", "at": 2.0},
+           {"action": "rename_done", "target": "h", "at": 3.0}]
+    assert plan(sessions, log=log)["unpin"] == []
+    picked_up = log + [{"action": "rename_done", "target": "h", "at": 4.0},
+                       {"action": "unpin", "target": "h", "at": 5.0}]
+    assert [u["id"] for u in plan(sessions, log=picked_up)["unpin"]] == ["h"]
+
+
+def test_pin_made_after_the_done_rename_is_kept():
+    log = [{"action": "pin", "target": "f", "at": 1.0},
+           {"action": "rename_done", "target": "d", "at": 2.0},
+           {"action": "unpin", "target": "d", "at": 3.0},
+           {"action": "pin", "target": "d", "at": 4.0},
+           {"action": "rename_done", "target": "f", "at": 5.0}]
+    p = plan([chat("d", "done: x", pinned=True), chat("f", "done: y", pinned=True)], log=log)
+    assert [u["id"] for u in p["unpin"]] == ["f"]
+
+
 def test_unfiled_top_level_only():
     sessions = [chat("loose", "Loose", group=None),
                 chat("nested", "Nested", group=None, startedBy="loose"),
