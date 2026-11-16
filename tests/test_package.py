@@ -75,3 +75,9 @@ def test_license_and_readme_exist():
     readme = (ROOT / "README.md").read_text()
     for word in ("Install", "Options", "Status", "/tidy-chats:rules"):
         assert word in readme
+
+
+def test_routine_option_promises_only_what_the_planner_does():
+    p = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
+    assert "never pinned" not in p["userConfig"]["routine_titles"]["description"]
+    assert "never pinned" not in (ROOT / "README.md").read_text()

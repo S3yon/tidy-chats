@@ -50,7 +50,7 @@ Set when the plugin is enabled, or later in `/config`.
 | `finished_idle_hours` | 24 | Archive `done:` / `handed off:` chats after this many idle hours |
 | `idle_days` | 14 | Archive any chat idle this many days |
 | `archive` | `auto` | `auto` archives in the sweep; `ask` asks one yes/no question first |
-| `routine_titles` | empty | Regex for routine run titles: never pinned, archived after 1 h idle |
+| `routine_titles` | empty | Regex for routine run titles: archived after 1 h idle |
 
 ## Skills
 - `/tidy-chats:tidy`: sweep now instead of waiting.

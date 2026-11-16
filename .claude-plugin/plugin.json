@@ -40,7 +40,7 @@
     "routine_titles": {
       "type": "string",
       "title": "Routine run titles (regex)",
-      "description": "Chats whose title matches are routine runs: never pinned, archived after 1 hour idle. Empty: none.",
+      "description": "Chats whose title matches are routine runs: archived after 1 hour idle. Empty: none.",
       "default": ""
     }
   }
