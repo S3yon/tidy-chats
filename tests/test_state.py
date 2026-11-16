@@ -128,3 +128,10 @@ def test_stale_takeover_never_moves_a_fresh_lock_aside(monkeypatch):
     monkeypatch.setattr(state, "_read_lock", racing)
     assert state.try_lock("local_b", 3000.0) is False
     assert state.sweep_state()["lock"]["holder"] == "local_c"
+
+
+def test_fallback_data_dir_is_the_plugin_data_folder(monkeypatch, tmp_path):
+    monkeypatch.delenv("TIDY_CHATS_DATA", raising=False)
+    monkeypatch.delenv("CLAUDE_PLUGIN_DATA", raising=False)
+    monkeypatch.setattr(state.Path, "home", classmethod(lambda cls: tmp_path))
+    assert state.data_dir() == tmp_path / ".claude" / "plugins" / "data" / "tidy-chats-tidy-chats"

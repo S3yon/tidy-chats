@@ -17,7 +17,7 @@ def data_dir():
     """The state folder, created on first use."""
     root = (os.environ.get("TIDY_CHATS_DATA")
             or os.environ.get("CLAUDE_PLUGIN_DATA")
-            or str(Path.home() / ".claude" / "plugins" / "data" / "tidy-chats"))
+            or str(Path.home() / ".claude" / "plugins" / "data" / "tidy-chats-tidy-chats"))
     d = Path(root)
     d.mkdir(parents=True, exist_ok=True)
     return d
