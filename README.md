@@ -6,8 +6,11 @@ normal chat turns. No scheduled job.
 - **Pinned** holds only chats in progress: a new chat pins itself, a finished one unpins itself.
 - **Sections:** a new chat files itself into the closest existing section.
 - **Finished chats** rename themselves `done: <title>` and mark themselves completed.
-- **Pick-ups:** a chat that continues work handed off by another chat detaches from it, so one
-  open chat no longer holds a whole chain open.
+- **Pick-ups:** a chat that continues work handed off by another chat (even one that chat
+  started as a side session) detaches from it, files and pins itself, renames the old chat
+  `done: ` and unpins it, so one open chat no longer holds a whole chain open.
+- **Hand-offs:** a chat that starts a `Pick up: ...` session keeps its pin until the pick-up
+  chat unpins it, so Pinned always shows the next click.
 - **Archive:** every few hours one chat runs a sweep that archives finished chats idle 24 h+,
   any chat idle 14 days+, and routine runs idle 1 h+.
 - **Learning:** when you undo something it did (re-pin, move, unarchive), it proposes a rule.
