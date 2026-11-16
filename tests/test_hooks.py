@@ -682,3 +682,10 @@ def test_actions_in_a_turn_without_a_note_are_the_users():
     by = {(e["action"], e["target"]): e.get("by") for e in state.read_log()}
     assert by[("pin", ME)] == "keeper" and by[("file", ME)] == "keeper"
     assert by[("unpin", OTHER)] == "user"
+
+
+def test_section_hints_put_folder_matches_first():
+    state.save_rules([{"kind": "section", "match": "title_word", "value": "deck", "section": "Games"},
+                      {"kind": "section", "match": "cwd", "value": "/Users/u/kb", "section": "System"}])
+    note = ctx(run("UserPromptSubmit", {"cwd": "/Users/u/kb/sub"}))
+    assert note.index("System") < note.index("Games")

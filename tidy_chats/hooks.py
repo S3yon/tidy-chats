@@ -56,15 +56,15 @@ def _ctx(event, text):
 # --- UserPromptSubmit -------------------------------------------------------
 
 def _section_hints(cwd):
-    hints = []
+    folder, words = [], []  # a folder match fits this chat for sure, so it comes first
     for r in state.load_rules():
         if r.get("kind") != "section" or not r.get("section"):
             continue
         if r.get("match") == "cwd" and planner.rule_matches(r, {"cwd": cwd}):
-            hints.append("%s (folder %s)" % (r["section"], r.get("value")))
+            folder.append("%s (folder %s)" % (r["section"], r.get("value")))
         elif r.get("match") == "title_word":
-            hints.append('%s for titles with "%s"' % (r["section"], r.get("value")))
-    return hints[:MAX_HINTS]
+            words.append('%s for titles with "%s"' % (r["section"], r.get("value")))
+    return (folder + words)[:MAX_HINTS]
 
 
 def _prompt(cid, payload, now):
