@@ -633,3 +633,25 @@ def test_debug_samples_saved_only_when_on(data_dir):
     sample = json.loads((data_dir / "samples" / "get_session.json").read_text())
     assert sample["tool_input"] == {"session_id": "self"}
     assert len(json.dumps(sample)) < 6000
+
+
+# --- review minors (0.1.5) ---------------------------------------------------
+
+def test_parallel_tool_calls_keep_each_others_flags(monkeypatch):
+    """Two sidebar calls in one turn run their hooks at once; neither loses the other's flag."""
+    run("UserPromptSubmit", {"prompt": "hi"})
+    stale = state.load_chat(ME)
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": "self", "pinned": True})
+    real, calls = state.load_chat, []
+
+    def first_read_is_stale(cid):
+        if not calls:
+            calls.append(cid)
+            return dict(stale)
+        return real(cid)
+
+    monkeypatch.setattr(state, "load_chat", first_read_is_stale)
+    tool("mcp__ccd_sidebar__move_sessions", {"session_ids": ["self"], "section_id": "cg-1"})
+    monkeypatch.setattr(state, "load_chat", real)
+    st = state.load_chat(ME)
+    assert st["pinned"] is True and st["filed"] is True

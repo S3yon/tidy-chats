@@ -2,12 +2,18 @@
 
 Every read tolerates missing or corrupt files (start fresh); every write is atomic.
 """
+import contextlib
 import json
 import os
 import re
 import tempfile
 import time
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # Windows: merges still apply only changed keys, without the file lock
+    fcntl = None
 
 LOCK_STALE_SECONDS = 20 * 60
 LOG_KEEP = 2000
@@ -62,6 +68,37 @@ def load_chat(chat_id):
 
 def save_chat(chat_id, data):
     write_json(_chat_path(chat_id), data)
+
+
+@contextlib.contextmanager
+def _chat_lock(chat_id):
+    path = _chat_path(chat_id).with_suffix(".lock")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if fcntl is None:
+        yield
+        return
+    with open(path, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def merge_chat(chat_id, before, after):
+    """Save only the keys a hook changed (before -> after) onto the chat's current state, so two
+    hooks running at once (parallel tool calls) never drop each other's flags."""
+    with _chat_lock(chat_id):
+        cur = load_chat(chat_id)
+        for key in set(before) | set(after):
+            if key not in after:
+                cur.pop(key, None)
+            elif before.get(key, _MISSING) != after[key]:
+                cur[key] = after[key]
+        save_chat(chat_id, cur)
+
+
+_MISSING = object()
 
 
 # --- sweep lock -------------------------------------------------------------

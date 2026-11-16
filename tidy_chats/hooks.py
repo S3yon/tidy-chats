@@ -192,6 +192,7 @@ def _post_tool(cid, payload, env, now):
         return cid if sid in (None, "", "self") else sid
 
     st = state.load_chat(cid)
+    before = dict(st)
     out = {}
     if short == "wrap_up":
         st["saw_wrap_up"] = True
@@ -257,7 +258,7 @@ def _post_tool(cid, payload, env, now):
                     st["done"] = planner.is_finished_title(info["title"])
     elif short == "list_sessions":
         out = _plan_swap(cid, inp, resp, env, now, st.get("parent"))
-    state.save_chat(cid, st)
+    state.merge_chat(cid, before, st)
     return out
 
 
