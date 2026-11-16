@@ -346,6 +346,24 @@ def test_pickup_quiet_when_detached_filed_and_pinned():
     assert stop() == {}
 
 
+def test_finished_pickup_is_not_told_it_missed_its_steps():
+    # A pick-up that did its steps, then finished (done, unpinned, completed), got a false
+    # "pick-up steps were not all seen" note at its last Stop, which took the sweep's turn.
+    run("UserPromptSubmit", {"prompt": PICKUP_PROMPT})
+    resp = json.dumps({"sessionId": ME, "group": {"id": "cg-1", "name": "S"},
+                       "parentSessionId": "local_p", "detached": False})
+    tool("mcp__ccd_session_mgmt__get_session", {"session_id": "self"}, resp)
+    tool("mcp__ccd_session_mgmt__detach_session", {"session_id": "self"})
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": "self", "pinned": True})
+    tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": "self", "title": "done: Pick up: x"})
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": "self", "pinned": False})
+    tool("mcp__ccd_sidebar__mark_completed", {"session_id": "self"})
+    tool(WRAP, {"recap": "All done."})
+    note = ctx(stop())
+    assert "pick-up" not in note
+    assert "sweep is due" in note
+
+
 def test_handing_off_chat_keeps_its_pin():
     state_sweep_recent()
     settle_first_turn()

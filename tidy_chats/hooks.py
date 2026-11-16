@@ -424,6 +424,7 @@ def _stop(cid, payload, env, now):
         st["finish_reminded"] = True
         note = notes.missed_note("finish", _keep_pin(cid, st, payload))
     elif (st.get("pickup") and not st.get("pickup_reminded")
+          and not (st.get("done") or st.get("completed") or st.get("handed_off"))
           and (st.get("nested") is not False or not st.get("pinned"))):
         st["pickup_reminded"] = True
         st["first_turn_reminded"] = True  # the pick-up reminder covers filing too
