@@ -152,3 +152,19 @@ def test_status_shows_what_a_sweep_planned_with(capsys):
                       "file": 1, "finished_idle_hours": 1.0, "sweep_hours": 2.0})
     cli.main(["status"])
     assert "checked 9, archive 2" in capsys.readouterr().out
+
+
+def test_status_says_when_a_sweep_is_overdue(capsys):
+    # A sweep 2 h 46 min late showed only "Last sweep: 2 h ago"; the miss was easy to overlook.
+    import time
+    now = time.time()
+    assert state.try_lock("local_a", now - 3 * 3600)
+    state.release_lock("local_a", now - 3 * 3600)
+    state.log_action({"action": "sweep", "chat": "local_a", "checked": 9, "archive": 2, "unpin": 0,
+                      "file": 1, "finished_idle_hours": 1.0, "sweep_hours": 2.0})
+    cli.main(["status"])
+    assert "Next sweep: overdue by 1 h" in capsys.readouterr().out
+    assert state.try_lock("local_a", now - 1800)
+    state.release_lock("local_a", now - 1800)
+    cli.main(["status"])
+    assert "Next sweep: due in 1 h" in capsys.readouterr().out

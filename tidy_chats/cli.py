@@ -73,6 +73,13 @@ def cmd_status(args):
     now = time.time()
     ss = state.sweep_state()
     print("Last sweep: %s" % (_ago(ss["last_sweep_at"], now) if ss["last_sweep_at"] else "never"))
+    hours = next((e.get("sweep_hours") for e in reversed(state.read_log())
+                  if e.get("action") == "sweep" and e.get("sweep_hours")), None)
+    if ss["last_sweep_at"] and hours:
+        due = ss["last_sweep_at"] + hours * 3600
+        span = _ago(min(due, now), max(due, now))[:-len(" ago")]
+        print("Next sweep: %s (every %g h; a chat's Stop starts it)"
+              % (("overdue by " if due <= now else "due in ") + span, hours))
     lock = ss["lock"]
     print("Sweep lock: %s" % ("held by %s since %s" % (lock.get("holder"), _ago(lock["at"], now))
                               if lock else "free"))
