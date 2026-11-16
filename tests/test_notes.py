@@ -109,3 +109,9 @@ def test_finish_notes_keep_pin_drop_the_unpin_step():
     for text in (notes.finish_note(keep_pin=True), notes.missed_note("finish", keep_pin=True)):
         assert "set_pinned" not in text
         assert "mark_completed" in text and "done: " in text
+
+
+def test_first_turn_reminder_checks_before_filing():
+    text = notes.missed_note("first_turn")
+    assert "get_session" in text and "if it has no group" in text
+    assert "is not in a sidebar section" not in text

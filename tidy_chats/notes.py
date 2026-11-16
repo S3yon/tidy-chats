@@ -68,11 +68,12 @@ def missed_note(step, keep_pin=False):
         body = ("this chat finished but its done steps were not seen: set_session_title \"self\" "
                 "to \"done: \" plus the title, " + unpin + "mark_completed \"self\". " + load)
     else:
-        body = ("this chat is not in a sidebar section yet: move_sessions [\"self\"] into the "
-                "closest existing section (list_sections), then set_pinned \"self\" true. Skip "
-                "both for a routine run or a nested side session. "
-                + _load(_SIDEBAR + "list_sections", _SIDEBAR + "move_sessions",
-                        _SIDEBAR + "set_pinned"))
+        body = ("this chat's first-turn filing was not seen: get_session \"self\"; if it has no "
+                "group, move_sessions [\"self\"] into the closest existing section (list_sections); "
+                "then set_pinned \"self\" true. Skip both for a routine run or a side session doing "
+                "part of the work of the chat that started it. "
+                + _load(_SESSION + "get_session", _SIDEBAR + "list_sections",
+                        _SIDEBAR + "move_sessions", _SIDEBAR + "set_pinned"))
     return "tidy-chats: " + body + " No reply text needed."
 
 
