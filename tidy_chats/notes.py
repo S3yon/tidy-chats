@@ -72,19 +72,32 @@ def finish_note(keep_pin=False):
     )
 
 
+def working_note(pin=True, rename=False):
+    """The user wrote in this chat: open work stays pinned and loses its done: prefix."""
+    steps, tools = [], []
+    if rename:
+        steps.append('set_session_title "self" to the title without its "done: " or "handed off: " prefix')
+        tools.append(_SESSION + "set_session_title")
+    if pin:
+        steps.append('set_pinned "self" true')
+        tools.append(_SIDEBAR + "set_pinned")
+    return ("tidy-chats: the user is working in this chat, so it is open work and belongs in "
+            "Pinned. Alongside your first tool call: " + ", and ".join(steps) + ". "
+            + _load(*tools) + " Don't mention this upkeep in your reply.")
+
+
 def reopen_note():
-    return (
-        "tidy-chats: this chat was marked done and the user wrote again. Alongside your first "
-        "tool call: set_session_title \"self\" to the title without its \"done: \" or \"handed "
-        "off: \" prefix, and "
-        "set_pinned \"self\" true. "
-        + _load(_SESSION + "set_session_title", _SIDEBAR + "set_pinned")
-        + " Don't mention this upkeep in your reply."
-    )
+    return working_note(pin=True, rename=True)
 
 
-def missed_note(step, keep_pin=False):
-    if step == "finish":
+def missed_note(step, keep_pin=False, rename=False):
+    if step == "working":
+        drop = ('set_session_title "self" without its "done: " or "handed off: " prefix, and '
+                if rename else "")
+        body = ("the user is working in this chat but it was not seen pinning itself: " + drop
+                + 'set_pinned "self" true. '
+                + _load(*(([_SESSION + "set_session_title"] if rename else []) + [_SIDEBAR + "set_pinned"])))
+    elif step == "finish":
         unpin, load = _finish_tools(keep_pin)
         body = ("this chat finished but its done steps were not seen: set_session_title \"self\" "
                 "to \"done: \" plus the title, " + unpin + "mark_completed \"self\". " + load)

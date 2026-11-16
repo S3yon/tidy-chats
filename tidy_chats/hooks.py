@@ -74,13 +74,56 @@ def _prompt(cid, payload, now):
         state.save_chat(cid, {"seen": 1, "started_at": now, "pickup": pickup})
         hints = _section_hints(payload.get("cwd") or "")
         return _ctx("UserPromptSubmit", notes.pickup_note(hints) if pickup else notes.first_turn_note(hints))
-    reopened = bool(st.get("done")) and not automated
     st.update({"finished": False, "waiting": False, "completed": False, "finish_reminded": False,
-               "wrapped_turn": False, "handed_off": False})
-    if reopened:
+               "wrapped_turn": False, "handed_off": False, "pin_asked": False})
+    note = None
+    if not automated:  # the user wrote here: open work is pinned and not done (his ask 2026-11-16)
+        rename = _done_known(cid, st)
+        pin = not _pin_known(cid, st)
+        if rename or pin:
+            note = notes.working_note(pin=pin, rename=rename)
         st["done"] = False
+        st["pin_asked"] = pin
     state.save_chat(cid, st)
-    return _ctx("UserPromptSubmit", notes.reopen_note()) if reopened else {}
+    return _ctx("UserPromptSubmit", note) if note else {}
+
+
+def _latest(cid, kinds):
+    """The newest logged action of these kinds on this chat, by any chat."""
+    best = None
+    for e in state.read_log():
+        if e.get("target") == cid and e.get("action") in kinds:
+            if best is None or _at(e) >= _at(best):
+                best = e
+    return best
+
+
+def _at(entry):
+    try:
+        return float(entry.get("at") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _pin_known(cid, st):
+    """Pinned as far as this keeper saw: the chat's own get_session, or the newest pin action."""
+    e = _latest(cid, ("pin", "unpin"))
+    seen_at = st.get("pinned_at")
+    if seen_at is not None and (e is None or float(seen_at) >= _at(e)):
+        return bool(st.get("pinned"))
+    if e is not None:
+        return e.get("action") == "pin"
+    return bool(st.get("pinned"))
+
+
+def _done_known(cid, st):
+    e = _latest(cid, ("rename", "rename_done"))
+    seen_at = st.get("title_at")
+    if seen_at is not None and (e is None or float(seen_at) >= _at(e)):
+        return planner.is_finished_title(st.get("title"))
+    if e is not None:
+        return e.get("action") == "rename_done"
+    return bool(st.get("done"))
 
 
 # --- PostToolUse ------------------------------------------------------------
@@ -170,13 +213,15 @@ def _post_tool(cid, payload, env, now):
         if t == cid:
             st["done"] = done
             st["title"] = inp.get("title")
-        state.log_action({"action": "rename_done" if done else "rename", "target": t, "chat": cid})
+            st["title_at"] = now
+        state.log_action({"action": "rename_done" if done else "rename", "target": t, "chat": cid, "at": now})
     elif short == "set_pinned":
         t = target(inp.get("session_id"))
         pinned = bool(inp.get("pinned"))
         if t == cid:
             st["pinned"] = pinned
-        state.log_action({"action": "pin" if pinned else "unpin", "target": t, "chat": cid})
+            st["pinned_at"] = now
+        state.log_action({"action": "pin" if pinned else "unpin", "target": t, "chat": cid, "at": now})
     elif short == "move_sessions":
         dest = {k: inp[k] for k in ("section_id", "group_id") if inp.get(k) is not None}
         for sid in inp.get("session_ids") or []:
@@ -205,8 +250,11 @@ def _post_tool(cid, payload, env, now):
                 st["nested"] = bool(info.get("parentSessionId")) and not info.get("detached")
                 st["parent"] = info.get("parentSessionId") if st["nested"] else None
                 st["pinned"] = bool(info.get("pinned"))
+                st["pinned_at"] = now
                 if isinstance(info.get("title"), str):
                     st["title"] = info["title"]
+                    st["title_at"] = now
+                    st["done"] = planner.is_finished_title(info["title"])
     elif short == "list_sessions":
         out = _plan_swap(cid, inp, resp, env, now, st.get("parent"))
     state.save_chat(cid, st)
@@ -347,9 +395,12 @@ def _stop(cid, payload, env, now):
           and not st.get("first_turn_reminded")):
         st["first_turn_reminded"] = True
         note = notes.missed_note("first_turn")
+    elif st.get("pin_asked") and not st.get("finished") and not _pin_known(cid, st):
+        note = notes.missed_note("working", rename=_done_known(cid, st))
     elif not st.get("waiting") and _sweep_due(ss, payload, env, now) and state.try_lock(cid, now):
         st["sweep_lock_at"] = now
         note = notes.sweep_note()
+    st["pin_asked"] = False  # one pin reminder per prompt
     state.save_chat(cid, st)
     return _ctx("Stop", note) if note else {}
 

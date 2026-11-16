@@ -14,7 +14,8 @@ def empty_plan(**kw):
 def test_notes_short():
     texts = [notes.first_turn_note([]), notes.first_turn_note(["Website for /Users/u/site"] * 3),
              notes.finish_note(), notes.reopen_note(), notes.missed_note("first_turn"),
-             notes.missed_note("finish"), notes.sweep_note()]
+             notes.missed_note("finish"), notes.sweep_note(), notes.working_note(rename=True),
+             notes.missed_note("working", rename=True)]
     for t in texts:
         assert len(t) < 900, t
         assert "tidy-chats" in t
@@ -125,3 +126,13 @@ def test_pickup_notes_short_with_hints():
     hints = ["Website for /Users/u/site"] * 3
     for text in (notes.pickup_note(hints), notes.missed_note("pickup")):
         assert len(text) < 900 and "tidy-chats" in text and "detach_session" in text
+
+
+def test_working_note_asks_only_for_what_is_missing():
+    both = notes.working_note(pin=True, rename=True)
+    assert 'set_pinned "self" true' in both and "set_session_title" in both
+    only_pin = notes.working_note(pin=True, rename=False)
+    assert "set_session_title" not in only_pin
+    only_rename = notes.working_note(pin=False, rename=True)
+    assert "set_pinned" not in only_rename and "set_session_title" in only_rename
+    assert 'set_pinned "self" true' in notes.missed_note("working")

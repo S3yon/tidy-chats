@@ -106,6 +106,7 @@ def test_first_prompt_note_then_silent():
     out = run("UserPromptSubmit", {"prompt": "hi"})
     assert out["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
     assert "first turn" in ctx(out)
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": "self", "pinned": True})
     assert run("UserPromptSubmit", {"prompt": "again"}) == {}
 
 
@@ -171,8 +172,9 @@ def test_reopen_note_after_done():
     settle_first_turn()
     tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": "self", "title": "done: Build"})
     note = ctx(run("UserPromptSubmit", {"prompt": "one more thing"}))
-    assert "marked done" in note
+    assert DROP_DONE in note
     assert state.load_chat(ME)["done"] is False
+    tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": "self", "title": "Build"})
     assert run("UserPromptSubmit", {"prompt": "and another"}) == {}
 
 
@@ -188,13 +190,79 @@ def test_automated_turn_does_not_reopen_a_done_chat():
     for prompt in AUTOMATED:
         assert run("UserPromptSubmit", {"prompt": prompt}) == {}, prompt
         assert state.load_chat(ME)["done"] is True
-    assert "marked done" in ctx(run("UserPromptSubmit", {"prompt": "one more thing"}))
+    assert DROP_DONE in ctx(run("UserPromptSubmit", {"prompt": "one more thing"}))
 
 
 def test_automated_first_prompt_waits_for_the_user():
     assert run("UserPromptSubmit", {"prompt": AUTOMATED[1]}) == {}
     assert not state.load_chat(ME).get("seen")
     assert "first turn" in ctx(run("UserPromptSubmit", {"prompt": "hi"}))
+
+
+# --- the user working in a chat keeps it pinned (his ask 2026-11-16) -------
+
+DROP_DONE = 'without its "done: "'
+PIN = 'set_pinned "self" true'
+
+
+def test_later_prompt_in_an_unpinned_chat_asks_to_pin():
+    run("UserPromptSubmit", {"prompt": "hi"})
+    note = ctx(run("UserPromptSubmit", {"prompt": "next step"}))
+    assert PIN in note and "working in this chat" in note
+    assert DROP_DONE not in note
+
+
+def test_pinned_chat_stays_quiet():
+    settle_first_turn()
+    assert run("UserPromptSubmit", {"prompt": "next step"}) == {}
+
+
+def test_chat_another_chat_closed_is_reopened_when_the_user_returns():
+    settle_first_turn()
+    # A pick-up chat renames this one done and unpins it.
+    tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": ME, "title": "done: Build"},
+         now=T0 + 10, CLAUDE_CODE_HOST_SESSION_ID=OTHER)
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": ME, "pinned": False},
+         now=T0 + 11, CLAUDE_CODE_HOST_SESSION_ID=OTHER)
+    note = ctx(run("UserPromptSubmit", {"prompt": "one more thing"}, now=T0 + 20))
+    assert PIN in note and DROP_DONE in note
+    tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": "self", "title": "Build"}, now=T0 + 21)
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": "self", "pinned": True}, now=T0 + 22)
+    assert run("UserPromptSubmit", {"prompt": "and another"}, now=T0 + 30) == {}
+
+
+def test_a_newer_get_session_pin_beats_an_older_unpin():
+    settle_first_turn()
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": ME, "pinned": False},
+         now=T0 + 10, CLAUDE_CODE_HOST_SESSION_ID=OTHER)
+    resp = json.dumps({"sessionId": ME, "title": "Build", "group": {"id": "cg-1"}, "pinned": True})
+    tool("mcp__ccd_session_mgmt__get_session", {"session_id": "self"}, resp, now=T0 + 20)
+    assert run("UserPromptSubmit", {"prompt": "next"}, now=T0 + 30) == {}
+
+
+def test_app_started_turns_never_ask_to_pin():
+    run("UserPromptSubmit", {"prompt": "hi"})
+    for prompt in AUTOMATED:
+        assert run("UserPromptSubmit", {"prompt": prompt}) == {}, prompt
+
+
+def test_stop_reminds_a_missed_pin_once():
+    state_sweep_recent()
+    run("UserPromptSubmit", {"prompt": "hi"})
+    tool("mcp__ccd_sidebar__move_sessions", {"session_ids": ["self"], "section_id": "cg-1"})
+    run("UserPromptSubmit", {"prompt": "next step"})
+    note = ctx(stop(last="Here it is."))
+    assert PIN in note
+    assert stop(now=T0 + 5, last="Here it is.") == {}
+
+
+def test_no_pin_reminder_once_the_chat_pinned():
+    state_sweep_recent()
+    run("UserPromptSubmit", {"prompt": "hi"})
+    tool("mcp__ccd_sidebar__move_sessions", {"session_ids": ["self"], "section_id": "cg-1"})
+    run("UserPromptSubmit", {"prompt": "next step"})
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": "self", "pinned": True})
+    assert stop(last="Here it is.") == {}
 
 
 def test_self_actions_logged_with_chat_id():
@@ -548,6 +616,8 @@ def test_fallback_finish_without_wrap_up():
     state_sweep_recent()
     run("UserPromptSubmit", CLAUDE_CODE_TERMINAL_MCP_TOOLS=None)
     tool("mcp__ccd_sidebar__move_sessions", {"session_ids": ["self"], "section_id": "cg-1"},
+         CLAUDE_CODE_TERMINAL_MCP_TOOLS=None)
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": "self", "pinned": True},
          CLAUDE_CODE_TERMINAL_MCP_TOOLS=None)
     out = stop(last="All set, the page is live.", CLAUDE_CODE_TERMINAL_MCP_TOOLS=None)
     assert "mark_completed" in ctx(out)
