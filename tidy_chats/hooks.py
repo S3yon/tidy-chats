@@ -175,20 +175,22 @@ def _post_tool(cid, payload, env, now):
     elif short == "detach_session":
         if target(inp.get("session_id")) == cid:
             st["nested"] = False
+            st["parent"] = None
     elif short == "get_session":
         if target(inp.get("session_id")) == cid:
             info = _json_obj(resp)
             if info is not None:
                 st["filed"] = bool(info.get("group")) or bool(st.get("filed"))
                 st["nested"] = bool(info.get("parentSessionId")) and not info.get("detached")
+                st["parent"] = info.get("parentSessionId") if st["nested"] else None
                 st["pinned"] = bool(info.get("pinned"))
     elif short == "list_sessions":
-        out = _plan_swap(cid, resp, env, now)
+        out = _plan_swap(cid, resp, env, now, st.get("parent"))
     state.save_chat(cid, st)
     return out
 
 
-def _plan_swap(cid, resp, env, now):
+def _plan_swap(cid, resp, env, now, parent=None):
     lock = state.sweep_state()["lock"]
     if not lock or lock.get("holder") != cid:
         return {}
@@ -197,7 +199,8 @@ def _plan_swap(cid, resp, env, now):
         return {}
     opts = config.options(env)
     plan = planner.make_plan(sessions, now=datetime.fromtimestamp(now, timezone.utc), self_id=cid,
-                             rules=state.load_rules(), log=state.read_log(), opts=opts)
+                             rules=state.load_rules(), log=state.read_log(), opts=opts,
+                             self_parent=parent)
     waiting = _update_ideas(plan["overrides"], now)
     text = notes.render_plan(plan, archive_mode=opts["archive"], ideas_waiting=waiting,
                              now=datetime.fromtimestamp(now, timezone.utc))

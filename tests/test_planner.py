@@ -17,11 +17,11 @@ def chat(sid, title="Some work", hours=1.0, **kw):
     return c
 
 
-def plan(sessions, rules=(), log=(), self_id="local_me", **opts):
+def plan(sessions, rules=(), log=(), self_id="local_me", self_parent=None, **opts):
     o = dict(OPTS)
     o.update(opts)
     return planner.make_plan(list(sessions), now=NOW, self_id=self_id, rules=list(rules),
-                             log=list(log), opts=o)
+                             log=list(log), opts=o, self_parent=self_parent)
 
 
 def archived_ids(p):
@@ -122,6 +122,12 @@ def test_never_archive_rule_exempts():
     rules = [{"kind": "never_archive", "match": "title_word", "value": "atlas"}]
     p = plan([chat("a", "done: Atlas v13", hours=99), chat("b", "done: other", hours=99)], rules)
     assert archived_ids(p) == ["b"]
+
+
+def test_sweeping_chat_missing_from_list_still_blocks_its_parent():
+    parent = chat("parent", "done: v13", hours=99)
+    assert archived_ids(plan([parent])) == ["parent"]
+    assert plan([parent], self_parent="parent")["archive"] == []
 
 
 def test_unpin_finished_pinned_and_keep_pinned_rule():

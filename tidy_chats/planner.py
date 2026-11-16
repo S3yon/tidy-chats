@@ -106,7 +106,7 @@ def _nested(chat):
     return bool(chat.get("startedBy")) and not chat.get("detached")
 
 
-def make_plan(sessions, *, now, self_id, rules, log, opts):
+def make_plan(sessions, *, now, self_id, rules, log, opts, self_parent=None):
     o = dict(DEFAULTS)
     o.update({k: v for k, v in (opts or {}).items() if v is not None})
     rules = rules or []
@@ -120,6 +120,9 @@ def make_plan(sessions, *, now, self_id, rules, log, opts):
     for c in live:
         if _nested(c) and c["startedBy"] in by_id:
             kids.setdefault(c["startedBy"], []).append(c["sessionId"])
+    # The real list leaves out the chat that called it; a nested sweeping chat is an open child.
+    if self_parent and self_parent in by_id and self_id not in by_id:
+        kids.setdefault(self_parent, []).append(self_id)
 
     def reason(c):
         if c["sessionId"] == self_id or c.get("isRunning") or c.get("pinned"):

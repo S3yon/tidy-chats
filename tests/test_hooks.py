@@ -284,6 +284,18 @@ def test_list_sessions_swap_mirrors_string_shape():
     assert out["hookSpecificOutput"]["updatedMCPToolOutput"]["content"][0]["type"] == "text"
 
 
+def test_nested_sweeper_keeps_its_parent_open():
+    settle_first_turn()
+    resp = json.dumps({"sessionId": ME, "group": {"id": "cg-1", "name": "S"},
+                       "parentSessionId": "local_old", "detached": False})
+    tool("mcp__ccd_session_mgmt__get_session", {"session_id": "self"}, resp)
+    stop()  # takes the lock
+    without_me = [c for c in json.loads(sessions_json()) if c["sessionId"] != ME]
+    out = tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200}, json.dumps(without_me))
+    text = out["hookSpecificOutput"]["updatedMCPToolOutput"]
+    assert "local_old" not in text
+
+
 def test_list_sessions_unparseable_passes_through():
     settle_first_turn()
     stop()
