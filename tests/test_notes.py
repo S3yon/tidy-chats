@@ -138,6 +138,10 @@ def test_working_note_asks_only_for_what_is_missing():
     assert 'set_pinned "self" true' in notes.missed_note("working")
 
 
+def test_missed_finish_skips_a_chat_already_done():
+    assert 'skip if it already starts with "done: "' in notes.missed_note("finish")
+
+
 def test_pickup_notes_name_chats_the_user_keeps_pinned():
     keep = ["local_old", 'titles with "deck"']
     for t in (notes.pickup_note([], keep), notes.missed_note("pickup", keep=keep)):

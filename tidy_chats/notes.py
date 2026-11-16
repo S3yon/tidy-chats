@@ -121,7 +121,8 @@ def missed_note(step, keep_pin=False, rename=False, keep=()):
     elif step == "finish":
         unpin, load = _finish_tools(keep_pin)
         body = ("this chat finished but its done steps were not seen: set_session_title \"self\" "
-                "to \"done: \" plus the title, " + unpin + "mark_completed \"self\". " + load)
+                "to \"done: \" plus the title (skip if it already starts with \"done: \" or "
+                "\"handed off: \"), " + unpin + "mark_completed \"self\". " + load)
     elif step == "pickup":
         tail = ("; detach_session \"self\" if it still nests under that chat; if it has no group, "
                 "move_sessions [\"self\"] into a section; set_pinned \"self\" true. Skip what is "
