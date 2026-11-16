@@ -105,7 +105,7 @@ def test_missing_fields_safe():
     p = plan([bare])
     assert p["archive"] == []
     assert p["unpin"] == []
-    assert [f["id"] for f in p["file"]] == ["bare"]
+    assert p["file"] == []  # no group key: unknown, not unfiled
 
 
 def test_bad_timestamp_never_archived():
@@ -144,6 +144,13 @@ def test_unfiled_top_level_only():
     p = plan(sessions)
     assert [f["id"] for f in p["file"]] == ["loose"]
     assert p["file"][0]["cwd"] == "/w"
+
+
+def test_missing_group_key_is_unknown_not_unfiled():
+    no_key = chat("nokey", "No key")
+    del no_key["group"]
+    p = plan([no_key, chat("loose", "Loose", group=None)])
+    assert [f["id"] for f in p["file"]] == ["loose"]
 
 
 def test_section_rule_hint_on_file():
