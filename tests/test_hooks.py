@@ -1,0 +1,359 @@
+import json
+from datetime import datetime, timedelta, timezone
+
+from tidy_chats import config, hooks, state
+
+T0 = 1_763_200_000.0  # a fixed "now"
+ME = "local_me"
+OTHER = "local_other"
+WRAP = "mcp__ccd_turn__wrap_up"
+
+
+def env(**kw):
+    e = {"CLAUDE_CODE_ENTRYPOINT": "claude-desktop", "CLAUDE_CODE_SESSION_ATTENDED": "1",
+         "CLAUDE_CODE_HOST_SESSION_ID": ME, "CLAUDE_CODE_TERMINAL_MCP_TOOLS": WRAP}
+    e.update(kw)
+    return {k: v for k, v in e.items() if v is not None}
+
+
+def run(event, payload=None, now=T0, **envkw):
+    p = {"session_id": "uuid-1", "cwd": "/Users/u/kb", "hook_event_name": event}
+    p.update(payload or {})
+    out = hooks.handle(event, p, env(**envkw), now)
+    json.dumps(out)  # always serialisable
+    return out
+
+
+def ctx(out):
+    return (out.get("hookSpecificOutput") or {}).get("additionalContext")
+
+
+def tool(name, tool_input=None, tool_response="ok", now=T0, **envkw):
+    return run("PostToolUse", {"tool_name": name, "tool_input": tool_input or {},
+                               "tool_response": tool_response}, now=now, **envkw)
+
+
+def stop(now=T0, last="Done, it works.", active=False, transcript=None, **envkw):
+    p = {"stop_hook_active": active, "last_assistant_message": last}
+    if transcript:
+        p["transcript_path"] = str(transcript)
+    return run("Stop", p, now=now, **envkw)
+
+
+def iso(hours_ago):
+    return (datetime.fromtimestamp(T0, timezone.utc) - timedelta(hours=hours_ago)).isoformat().replace("+00:00", "Z")
+
+
+def sessions_json():
+    return json.dumps([
+        {"sessionId": "local_old", "title": "done: Old", "cwd": "/w", "isArchived": False,
+         "isRunning": False, "lastActivityAt": iso(48), "group": {"id": "cg-1", "name": "System"}},
+        {"sessionId": ME, "title": "Me", "cwd": "/w", "isArchived": False, "isRunning": True,
+         "lastActivityAt": iso(0), "group": {"id": "cg-1", "name": "System"}, "pinned": True},
+    ])
+
+
+def settle_first_turn():
+    """A chat past its first turn that is filed and pinned."""
+    run("UserPromptSubmit", {"prompt": "hi"})
+    tool("mcp__ccd_sidebar__move_sessions", {"session_ids": ["self"], "section_id": "cg-1"})
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": "self", "pinned": True})
+
+
+# --- config -----------------------------------------------------------------
+
+def test_config_defaults_and_overrides():
+    assert config.options({}) == {"sweep_hours": 6.0, "finished_idle_hours": 24.0, "idle_days": 14.0,
+                                  "archive": "auto", "routine_titles": ""}
+    o = config.options({"CLAUDE_PLUGIN_OPTION_SWEEP_HOURS": "2", "CLAUDE_PLUGIN_OPTION_ARCHIVE": "ask",
+                        "CLAUDE_PLUGIN_OPTION_IDLE_DAYS": "junk", "CLAUDE_PLUGIN_OPTION_ROUTINE_TITLES": "^Daily"})
+    assert o["sweep_hours"] == 2.0 and o["archive"] == "ask" and o["idle_days"] == 14.0
+    assert o["routine_titles"] == "^Daily"
+    assert config.options({"CLAUDE_PLUGIN_OPTION_ARCHIVE": "never"})["archive"] == "auto"
+
+
+def test_config_chat_id():
+    assert config.chat_id({"session_id": "u"}, {"CLAUDE_CODE_HOST_SESSION_ID": "local_x"}) == "local_x"
+    assert config.chat_id({"session_id": "u"}, {}) == "u"
+
+
+# --- guards -----------------------------------------------------------------
+
+def test_inactive_env_noop():
+    assert run("UserPromptSubmit", CLAUDE_CODE_ENTRYPOINT="cli") == {}
+    assert run("UserPromptSubmit", CLAUDE_CODE_SESSION_ATTENDED="0") == {}
+    assert state.load_chat(ME) == {}
+    forced = run("UserPromptSubmit", CLAUDE_CODE_ENTRYPOINT="cli", TIDY_CHATS_FORCE="1")
+    assert "tidy-chats" in ctx(forced)
+
+
+def test_subagent_noop():
+    assert run("UserPromptSubmit", {"agent_id": "a1"}) == {}
+    assert run("Stop", {"agent_id": "a1"}) == {}
+
+
+def test_exception_returns_empty(monkeypatch, data_dir):
+    def boom(*a, **k):
+        raise RuntimeError("disk on fire")
+    monkeypatch.setattr(state, "load_chat", boom)
+    assert run("UserPromptSubmit") == {}
+    assert "disk on fire" in (data_dir / "errors.log").read_text()
+
+
+# --- first turn, finish, reopen ---------------------------------------------
+
+def test_first_prompt_note_then_silent():
+    out = run("UserPromptSubmit", {"prompt": "hi"})
+    assert out["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
+    assert "first turn" in ctx(out)
+    assert run("UserPromptSubmit", {"prompt": "again"}) == {}
+
+
+def test_first_prompt_carries_section_rule_hints():
+    state.save_rules([{"kind": "section", "match": "cwd", "value": "/Users/u/kb", "section": "System"},
+                      {"kind": "section", "match": "cwd", "value": "/Users/u/site", "section": "Website"}])
+    note = ctx(run("UserPromptSubmit", {"cwd": "/Users/u/kb/sub"}))
+    assert "System" in note and "Website" not in note
+
+
+def test_wrap_up_without_ask_gives_finish_note():
+    settle_first_turn()
+    out = tool(WRAP, {"recap": "Built it."})
+    assert out["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
+    assert "done: " in ctx(out)
+    assert state.load_chat(ME)["finished"] is True
+
+
+def test_wrap_up_with_ask_marks_waiting():
+    settle_first_turn()
+    assert tool(WRAP, {"recap": "r", "ask": "Ship it?"}) == {}
+    st = state.load_chat(ME)
+    assert st["waiting"] is True and st["finished"] is False
+
+
+def test_rename_done_observed():
+    settle_first_turn()
+    tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": "self", "title": "done: Build"})
+    assert state.load_chat(ME)["done"] is True
+    assert any(e["action"] == "rename_done" and e["target"] == ME for e in state.read_log())
+    tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": ME, "title": "Build v2"})
+    assert state.load_chat(ME)["done"] is False
+
+
+def test_reopen_note_after_done():
+    settle_first_turn()
+    tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": "self", "title": "done: Build"})
+    note = ctx(run("UserPromptSubmit", {"prompt": "one more thing"}))
+    assert "marked done" in note
+    assert state.load_chat(ME)["done"] is False
+    assert run("UserPromptSubmit", {"prompt": "and another"}) == {}
+
+
+def test_self_actions_logged_with_chat_id():
+    settle_first_turn()
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": "self", "pinned": False})
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": OTHER, "pinned": False})
+    actions = [(e["action"], e["target"]) for e in state.read_log()]
+    assert ("file", ME) in actions and ("unpin", ME) in actions and ("unpin", OTHER) in actions
+    assert state.load_chat(ME)["pinned"] is False
+
+
+def test_get_session_marks_filed_and_nested():
+    run("UserPromptSubmit")
+    resp = [{"type": "text", "text": json.dumps({"sessionId": ME, "group": {"id": "cg-1", "name": "S"},
+                                                  "parentSessionId": "local_p", "detached": False})}]
+    tool("mcp__ccd_session_mgmt__get_session", {"session_id": "self"}, resp)
+    st = state.load_chat(ME)
+    assert st["filed"] is True and st["nested"] is True
+    tool("mcp__ccd_session_mgmt__detach_session", {"session_id": "self"})
+    assert state.load_chat(ME)["nested"] is False
+
+
+def test_archive_logged_only_when_it_worked():
+    tool("mcp__ccd_session_mgmt__archive_session", {"session_id": "local_a"},
+         'Archived session local_a ("done: A").')
+    tool("mcp__ccd_session_mgmt__archive_session", {"session_id": "local_b"},
+         "Session local_b is still working and was not archived.")
+    assert [e["target"] for e in state.read_log() if e["action"] == "archive"] == ["local_a"]
+
+
+# --- Stop -------------------------------------------------------------------
+
+def test_stop_reminds_missed_finish_once():
+    settle_first_turn()
+    state_sweep_recent()
+    tool(WRAP, {"recap": "r"})
+    out = stop()
+    assert out["hookSpecificOutput"]["hookEventName"] == "Stop"
+    assert "mark_completed" in ctx(out)
+    assert stop(now=T0 + 5) == {}
+
+
+def test_stop_quiet_when_finish_steps_done():
+    settle_first_turn()
+    state_sweep_recent()
+    tool(WRAP, {"recap": "r"})
+    tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": "self", "title": "done: x"})
+    assert stop() == {}
+
+
+def test_stop_reminds_unfiled_once():
+    state_sweep_recent()
+    run("UserPromptSubmit")
+    out = stop()
+    assert "move_sessions" in ctx(out)
+    assert stop(now=T0 + 5) == {}
+
+
+def test_stop_no_unfiled_reminder_for_nested_side_session():
+    state_sweep_recent()
+    run("UserPromptSubmit")
+    resp = json.dumps({"sessionId": ME, "group": None, "parentSessionId": "local_p", "detached": False})
+    tool("mcp__ccd_session_mgmt__get_session", {"session_id": "self"}, resp)
+    assert stop() == {}
+
+
+def state_sweep_recent():
+    state.try_lock("local_somebody", T0 - 60)
+    state.release_lock("local_somebody", T0 - 60)
+
+
+def test_stop_takes_lock_when_due():
+    settle_first_turn()
+    out = stop()
+    assert "list_sessions" in ctx(out)
+    assert state.sweep_state()["lock"]["holder"] == ME
+
+
+def test_stop_no_sweep_when_recent():
+    settle_first_turn()
+    state_sweep_recent()
+    assert stop() == {}
+
+
+def test_stop_skips_sweep_when_lock_held_elsewhere():
+    settle_first_turn()
+    state.try_lock(OTHER, T0 - 10)
+    assert stop() == {}
+
+
+def test_stop_skips_sweep_when_waiting():
+    settle_first_turn()
+    tool(WRAP, {"recap": "r", "ask": "Which one?"})
+    assert stop() == {}
+    assert state.sweep_state()["lock"] is None
+
+
+def test_stop_skips_big_transcript_unless_overdue(tmp_path):
+    settle_first_turn()
+    big = tmp_path / "t.jsonl"
+    big.write_bytes(b"x" * (4 * 1024 * 1024 + 1))
+    state.try_lock("local_somebody", T0 - 7 * 3600)
+    state.release_lock("local_somebody", T0 - 7 * 3600)  # 7 h ago: due, not a day overdue
+    assert stop(transcript=big) == {}
+    state.try_lock("local_somebody", T0 - 31 * 3600)
+    state.release_lock("local_somebody", T0 - 31 * 3600)  # 31 h ago: 25 h overdue
+    assert "list_sessions" in ctx(stop(transcript=big))
+
+
+def test_stop_hook_active_never_adds_notes():
+    run("UserPromptSubmit")
+    assert stop(active=True) == {}
+
+
+def test_list_sessions_swapped_only_for_holder():
+    settle_first_turn()
+    stop()  # takes the lock
+    resp = [{"type": "text", "text": sessions_json()}]
+    out = tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200}, resp)
+    swapped = out["hookSpecificOutput"]["updatedMCPToolOutput"]
+    assert isinstance(swapped, list) and swapped[0]["type"] == "text"
+    assert "local_old" in swapped[0]["text"] and "archive_session" in swapped[0]["text"]
+    other = tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200}, resp,
+                 CLAUDE_CODE_HOST_SESSION_ID=OTHER)
+    assert other == {}
+
+
+def test_list_sessions_swap_mirrors_string_shape():
+    settle_first_turn()
+    stop()
+    out = tool("mcp__ccd_session_mgmt__list_sessions", {}, sessions_json())
+    assert isinstance(out["hookSpecificOutput"]["updatedMCPToolOutput"], str)
+    out = tool("mcp__ccd_session_mgmt__list_sessions", {},
+               {"content": [{"type": "text", "text": sessions_json()}]})
+    assert out["hookSpecificOutput"]["updatedMCPToolOutput"]["content"][0]["type"] == "text"
+
+
+def test_list_sessions_unparseable_passes_through():
+    settle_first_turn()
+    stop()
+    assert tool("mcp__ccd_session_mgmt__list_sessions", {}, "Error: no app window") == {}
+
+
+def test_continuation_releases_lock_even_without_plan():
+    settle_first_turn()
+    stop()  # takes the lock, chat ignores the note
+    assert stop(now=T0 + 30, active=True) == {}
+    ss = state.sweep_state()
+    assert ss["lock"] is None and ss["last_sweep_at"] == T0 + 30
+
+
+def test_holder_releases_on_next_stop_even_if_not_flagged_active():
+    settle_first_turn()
+    stop()
+    assert stop(now=T0 + 30) == {}
+    assert state.sweep_state()["lock"] is None
+
+
+def test_overrides_become_ideas_deduped():
+    settle_first_turn()
+    state.log_action({"action": "unpin", "target": "local_old", "at": 1.0})
+    sessions = json.loads(sessions_json())
+    sessions[0]["pinned"] = True  # the user pinned it back
+    for i in range(2):
+        state.try_lock(ME, T0 + i)
+        tool("mcp__ccd_session_mgmt__list_sessions", {}, json.dumps(sessions), now=T0 + i)
+        state.release_lock(ME, T0 + i)
+    ideas = state.load_ideas()
+    assert len(ideas) == 1
+    assert ideas[0]["kind"] == "keep_pinned" and ideas[0]["target"] == "local_old"
+    assert ideas[0]["count"] == 1 and ideas[0]["status"] == "pending"
+    state.log_action({"action": "unpin", "target": "local_old", "at": 2.0})
+    state.try_lock(ME, T0 + 9)
+    out = tool("mcp__ccd_session_mgmt__list_sessions", {}, json.dumps(sessions), now=T0 + 9)
+    assert state.load_ideas()[0]["count"] == 2
+    assert "1 rule idea" in out["hookSpecificOutput"]["updatedMCPToolOutput"]
+
+
+def test_rejected_idea_not_raised_again():
+    settle_first_turn()
+    state.save_ideas([{"id": "1", "kind": "keep_pinned", "target": "local_old", "status": "rejected",
+                       "events": [1.0], "count": 1}])
+    state.log_action({"action": "unpin", "target": "local_old", "at": 5.0})
+    sessions = json.loads(sessions_json())
+    sessions[0]["pinned"] = True
+    state.try_lock(ME, T0)
+    out = tool("mcp__ccd_session_mgmt__list_sessions", {}, json.dumps(sessions))
+    assert len(state.load_ideas()) == 1
+    assert "rule idea" not in out["hookSpecificOutput"]["updatedMCPToolOutput"]
+
+
+def test_fallback_finish_without_wrap_up():
+    state_sweep_recent()
+    run("UserPromptSubmit", CLAUDE_CODE_TERMINAL_MCP_TOOLS=None)
+    tool("mcp__ccd_sidebar__move_sessions", {"session_ids": ["self"], "section_id": "cg-1"},
+         CLAUDE_CODE_TERMINAL_MCP_TOOLS=None)
+    out = stop(last="All set, the page is live.", CLAUDE_CODE_TERMINAL_MCP_TOOLS=None)
+    assert "mark_completed" in ctx(out)
+    run("UserPromptSubmit", CLAUDE_CODE_TERMINAL_MCP_TOOLS=None)
+    assert stop(last="Which colour do you want?", CLAUDE_CODE_TERMINAL_MCP_TOOLS=None) == {}
+
+
+def test_debug_samples_saved_only_when_on(data_dir):
+    tool("mcp__ccd_session_mgmt__get_session", {"session_id": "self"}, "x")
+    assert not (data_dir / "samples").exists()
+    (data_dir / "debug").write_text("on")
+    tool("mcp__ccd_session_mgmt__get_session", {"session_id": "self"}, "x" * 10000)
+    sample = json.loads((data_dir / "samples" / "get_session.json").read_text())
+    assert sample["tool_input"] == {"session_id": "self"}
+    assert len(json.dumps(sample)) < 6000
