@@ -1,0 +1,47 @@
+{
+  "name": "tidy-chats",
+  "description": "Keeps the desktop app's Code-tab sidebar tidy during normal chat turns: pins chats in progress, files them into sections, marks finished ones done and archives them, and learns from your undos.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "keywords": ["sidebar", "sessions", "desktop", "hooks", "housekeeping"],
+  "author": {
+    "name": "Seyon Sri",
+    "url": "https://github.com/S3yon"
+  },
+  "userConfig": {
+    "sweep_hours": {
+      "type": "number",
+      "title": "Hours between sweeps",
+      "description": "How long after the last sweep a chat's Stop starts the next one.",
+      "default": 6.0,
+      "min": 0.25
+    },
+    "finished_idle_hours": {
+      "type": "number",
+      "title": "Archive finished chats after (hours)",
+      "description": "A chat titled done: or handed off: is archived once idle this long.",
+      "default": 24.0,
+      "min": 1
+    },
+    "idle_days": {
+      "type": "number",
+      "title": "Archive any idle chat after (days)",
+      "description": "Any chat with no activity for this many days is archived.",
+      "default": 14.0,
+      "min": 1
+    },
+    "archive": {
+      "type": "string",
+      "title": "Archiving",
+      "description": "auto archives in the sweep; ask lists the archives as one yes/no question.",
+      "options": ["auto", "ask"],
+      "default": "auto"
+    },
+    "routine_titles": {
+      "type": "string",
+      "title": "Routine run titles (regex)",
+      "description": "Chats whose title matches are routine runs: never pinned, archived after 1 hour idle. Empty: none.",
+      "default": ""
+    }
+  }
+}
