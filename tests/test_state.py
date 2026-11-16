@@ -104,3 +104,10 @@ def test_rules_and_ideas_roundtrip():
     state.save_ideas([{"id": "i1"}])
     assert state.load_rules() == [{"kind": "keep_pinned"}]
     assert state.load_ideas() == [{"id": "i1"}]
+
+
+def test_retaking_a_held_lock_refreshes_its_time():
+    assert state.try_lock("local_a", 1000.0) is True
+    assert state.try_lock("local_a", 2000.0) is True
+    assert state.sweep_state()["lock"]["at"] == 2000.0
+    assert state.try_lock("local_b", 2000.0 + 1199) is False  # not stale: the holder renewed it

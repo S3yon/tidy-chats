@@ -104,6 +104,7 @@ def try_lock(holder, now):
     if cur is None:  # vanished between the two calls
         return _create_lock(path, holder, now)
     if cur.get("holder") == holder:
+        write_json(path, {"holder": holder, "at": now})  # renewed: not stale for another 20 min
         return True
     if now - cur["at"] <= LOCK_STALE_SECONDS:
         return False
