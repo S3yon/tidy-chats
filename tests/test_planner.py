@@ -219,6 +219,12 @@ def test_override_uses_last_action_only():
     assert plan([chat("p", "Work", pinned=True)], log=log)["overrides"] == []
 
 
+def test_undoing_the_users_own_action_is_not_an_override():
+    log = [{"action": "unpin", "target": "p", "at": 1.0, "by": "user"},
+           {"action": "archive", "target": "u", "at": 2.0, "by": "user"}]
+    sessions = [chat("p", "done: kept", pinned=True), chat("u", "Back again")]
+    assert plan(sessions, log=log)["overrides"] == []
+
 def test_rule_matches_kinds():
     c = chat("local_x", "Atlas v14 pace", cwd="/Users/u/kb")
     assert planner.rule_matches({"kind": "keep_pinned", "match": "session", "value": "local_x"}, c)

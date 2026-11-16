@@ -221,7 +221,7 @@ def find_overrides(by_id, log):
     out = []
     for target, e in last.items():
         c = by_id.get(target)
-        if c is None:
+        if c is None or e.get("by") == "user":  # undoing what the user asked for is no lesson
             continue
         group = c.get("group") if isinstance(c.get("group"), dict) else None
         kind = None

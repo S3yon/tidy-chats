@@ -74,11 +74,11 @@ def _prompt(cid, payload, now):
         if automated:  # the first-turn note waits for the user's own prompt
             return {}
         pickup = bool(PICKUP.search(str(payload.get("prompt") or "")))
-        state.save_chat(cid, {"seen": 1, "started_at": now, "pickup": pickup})
+        state.save_chat(cid, {"seen": 1, "started_at": now, "pickup": pickup, "noted": True})
         hints = _section_hints(payload.get("cwd") or "")
         return _ctx("UserPromptSubmit", notes.pickup_note(hints) if pickup else notes.first_turn_note(hints))
     st.update({"finished": False, "waiting": False, "completed": False, "finish_reminded": False,
-               "wrapped_turn": False, "handed_off": False, "pin_asked": False})
+               "wrapped_turn": False, "handed_off": False, "pin_asked": False, "noted": False})
     note = None
     if not automated:  # the user wrote here: open work is pinned and not done (his ask 2026-11-16)
         rename = _done_known(cid, st)
@@ -87,6 +87,7 @@ def _prompt(cid, payload, now):
             note = notes.working_note(pin=pin, rename=rename)
         st["done"] = False
         st["pin_asked"] = pin
+    st["noted"] = bool(note)
     state.save_chat(cid, st)
     return _ctx("UserPromptSubmit", note) if note else {}
 
@@ -197,6 +198,8 @@ def _post_tool(cid, payload, env, now):
     st = state.load_chat(cid)
     before = dict(st)
     out = {}
+    # Calls in a turn the keeper sent a note in are the keeper's; the rest the user asked for.
+    by = "keeper" if st.get("noted") else "user"
     if short in ("set_session_title", "set_pinned", "move_sessions") and _declined(resp):
         short = "declined"
     if short == "wrap_up":
@@ -208,6 +211,7 @@ def _post_tool(cid, payload, env, now):
             st.update({"finished": True, "waiting": False})
             if not (st.get("done") or st.get("handed_off")):
                 out = _ctx("PostToolUse", notes.finish_note(_keep_pin(cid, st, payload)))
+                st["noted"] = True
     elif short == "start_session":
         # Handing off: the chat keeps its pin until the pick-up chat unpins it (KB rule 2026-10-21).
         if str(inp.get("title") or "").strip().lower().startswith("pick up"):
@@ -220,27 +224,29 @@ def _post_tool(cid, payload, env, now):
             st["done"] = done
             st["title"] = inp.get("title")
             st["title_at"] = now
-        state.log_action({"action": "rename_done" if done else "rename", "target": t, "chat": cid, "at": now})
+        state.log_action({"action": "rename_done" if done else "rename", "target": t, "chat": cid,
+                          "at": now, "by": by})
     elif short == "set_pinned":
         t = target(inp.get("session_id"))
         pinned = bool(inp.get("pinned"))
         if t == cid:
             st["pinned"] = pinned
             st["pinned_at"] = now
-        state.log_action({"action": "pin" if pinned else "unpin", "target": t, "chat": cid, "at": now})
+        state.log_action({"action": "pin" if pinned else "unpin", "target": t, "chat": cid, "at": now,
+                          "by": by})
     elif short == "move_sessions":
         dest = {k: inp[k] for k in ("section_id", "group_id") if inp.get(k) is not None}
         for sid in inp.get("session_ids") or []:
             t = target(sid)
             if t == cid:
                 st["filed"] = True
-            entry = {"action": "file", "target": t, "chat": cid}
+            entry = {"action": "file", "target": t, "chat": cid, "by": by}
             entry.update(dest)
             state.log_action(entry)
     elif short == "archive_session":
         t = target(inp.get("session_id"))
         if t != cid and "archived session" in _text(resp).lower():
-            state.log_action({"action": "archive", "target": t, "chat": cid})
+            state.log_action({"action": "archive", "target": t, "chat": cid, "by": by})
     elif short == "mark_completed":
         if target(inp.get("session_id")) == cid:
             st["completed"] = True
@@ -263,6 +269,8 @@ def _post_tool(cid, payload, env, now):
                     st["done"] = planner.is_finished_title(info["title"])
     elif short == "list_sessions":
         out = _plan_swap(cid, inp, resp, env, now, st.get("parent"))
+        if out:
+            st["noted"] = True
     state.merge_chat(cid, before, st)
     return out
 
@@ -412,6 +420,8 @@ def _stop(cid, payload, env, now):
         st["sweep_lock_at"] = now
         note = notes.sweep_note()
     st["pin_asked"] = False  # one pin reminder per prompt
+    if note:
+        st["noted"] = True
     state.save_chat(cid, st)
     return _ctx("Stop", note) if note else {}
 

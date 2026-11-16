@@ -673,3 +673,12 @@ def test_a_title_that_mentions_failure_still_counts_as_renamed():
     tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": "self", "title": "done: Fix login failure"},
          [{"type": "text", "text": 'Renamed this session to "done: Fix login failure" (was "Fix login failure").'}])
     assert state.load_chat(ME)["done"] is True
+
+
+def test_actions_in_a_turn_without_a_note_are_the_users():
+    settle_first_turn()  # first turn: the keeper's note asked for these
+    run("UserPromptSubmit", {"prompt": "unpin the other chat"})  # pinned, so no note this turn
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": OTHER, "pinned": False})
+    by = {(e["action"], e["target"]): e.get("by") for e in state.read_log()}
+    assert by[("pin", ME)] == "keeper" and by[("file", ME)] == "keeper"
+    assert by[("unpin", OTHER)] == "user"
