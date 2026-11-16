@@ -14,6 +14,9 @@ OVERDUE_FOR_BIG = 24 * 3600
 MAX_HINTS = 3
 SAMPLE_MAX = 4000
 FULL_LIST = 200
+# A turn the app started, not the user: another chat's message, a side session ending, CI, a task.
+AUTOMATED = re.compile(r"\A\s*(?:[^<\n]{0,80}\n\s*)?<(?:cross-session-message|side-sessions-event|"
+                       r"ci-monitor-event|task-notification)\b")
 # A first prompt that picks up another chat's work: names a handoff, or a line starts "Pick up".
 PICKUP = re.compile(r"(?im)(\bhand(?:ed)?[- ]?offs?\b|^\W*pick up\b)")
 
@@ -63,12 +66,15 @@ def _section_hints(cwd):
 
 def _prompt(cid, payload, now):
     st = state.load_chat(cid)
+    automated = bool(AUTOMATED.match(str(payload.get("prompt") or "")))
     if not st.get("seen"):
+        if automated:  # the first-turn note waits for the user's own prompt
+            return {}
         pickup = bool(PICKUP.search(str(payload.get("prompt") or "")))
         state.save_chat(cid, {"seen": 1, "started_at": now, "pickup": pickup})
         hints = _section_hints(payload.get("cwd") or "")
         return _ctx("UserPromptSubmit", notes.pickup_note(hints) if pickup else notes.first_turn_note(hints))
-    reopened = bool(st.get("done"))
+    reopened = bool(st.get("done")) and not automated
     st.update({"finished": False, "waiting": False, "completed": False, "finish_reminded": False,
                "wrapped_turn": False, "handed_off": False})
     if reopened:

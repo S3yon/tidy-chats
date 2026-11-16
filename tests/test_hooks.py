@@ -176,6 +176,27 @@ def test_reopen_note_after_done():
     assert run("UserPromptSubmit", {"prompt": "and another"}) == {}
 
 
+AUTOMATED = ['<side-sessions-event>\nSession "tests" ended its turn: done.\n</side-sessions-event>',
+             'Another Claude session sent a message:\n<cross-session-message from="local_x">bug</cross-session-message>',
+             '<ci-monitor-event pr="12">checks failed</ci-monitor-event>',
+             '<task-notification>agent finished</task-notification>']
+
+
+def test_automated_turn_does_not_reopen_a_done_chat():
+    settle_first_turn()
+    tool("mcp__ccd_session_mgmt__set_session_title", {"session_id": "self", "title": "done: Build"})
+    for prompt in AUTOMATED:
+        assert run("UserPromptSubmit", {"prompt": prompt}) == {}, prompt
+        assert state.load_chat(ME)["done"] is True
+    assert "marked done" in ctx(run("UserPromptSubmit", {"prompt": "one more thing"}))
+
+
+def test_automated_first_prompt_waits_for_the_user():
+    assert run("UserPromptSubmit", {"prompt": AUTOMATED[1]}) == {}
+    assert not state.load_chat(ME).get("seen")
+    assert "first turn" in ctx(run("UserPromptSubmit", {"prompt": "hi"}))
+
+
 def test_self_actions_logged_with_chat_id():
     settle_first_turn()
     tool("mcp__ccd_sidebar__set_pinned", {"session_id": "self", "pinned": False})
