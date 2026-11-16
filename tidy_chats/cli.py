@@ -86,6 +86,13 @@ def cmd_status(args):
     print("Last actions:" if log else "Last actions: none")
     for e in log:
         when = _ago(e["at"], now) if isinstance(e.get("at"), (int, float)) else "?"
+        if e.get("action") == "sweep":
+            detail = "checked %s, archive %s, unpin %s, file %s" % tuple(
+                e.get(k, "?") for k in ("checked", "archive", "unpin", "file"))
+            if e.get("finished_idle_hours") is not None:
+                detail += ", finished chats after %g h" % e["finished_idle_hours"]
+            print("  %s  sweep (%s)" % (when, detail))
+            continue
         print("  %s  %s %s" % (when, e.get("action"), e.get("target") or ""))
     return 0
 

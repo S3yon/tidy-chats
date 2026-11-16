@@ -138,3 +138,10 @@ def test_debug_toggle(data_dir):
 def test_usage_errors():
     assert cli.main([]) == 2
     assert cli.main(["nope"]) == 2
+
+
+def test_status_shows_what_a_sweep_planned_with(capsys):
+    state.log_action({"action": "sweep", "chat": "local_a", "checked": 9, "archive": 2, "unpin": 0,
+                      "file": 1, "finished_idle_hours": 1.0, "sweep_hours": 2.0})
+    cli.main(["status"])
+    assert "checked 9, archive 2" in capsys.readouterr().out

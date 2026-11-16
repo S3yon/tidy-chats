@@ -696,3 +696,12 @@ def test_pickup_note_spares_a_chat_the_user_keeps_pinned():
                       {"kind": "keep_pinned", "match": "title_word", "value": "deck"}])
     note = ctx(run("UserPromptSubmit", {"prompt": PICKUP_PROMPT}))
     assert "local_old" in note and '"deck"' in note and len(note) < 900
+
+
+def test_sweep_log_records_the_options_it_planned_with():
+    settle_first_turn()
+    stop()
+    tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200}, sessions_json(),
+         CLAUDE_PLUGIN_OPTION_FINISHED_IDLE_HOURS="1", CLAUDE_PLUGIN_OPTION_SWEEP_HOURS="2")
+    sweep = [e for e in state.read_log() if e["action"] == "sweep"][-1]
+    assert sweep["finished_idle_hours"] == 1.0 and sweep["sweep_hours"] == 2.0

@@ -360,7 +360,8 @@ def _plan_swap(cid, inp, resp, env, now, parent=None):
                              now=datetime.fromtimestamp(now, timezone.utc))
     state.log_action({"action": "sweep", "chat": cid, "checked": plan["checked"],
                       "archive": len(plan["archive"]), "unpin": len(plan["unpin"]),
-                      "file": len(plan["file"])})
+                      "file": len(plan["file"]), "finished_idle_hours": opts["finished_idle_hours"],
+                      "sweep_hours": opts["sweep_hours"]})
     return {"hookSpecificOutput": {"hookEventName": "PostToolUse",
                                    "updatedMCPToolOutput": _mirror(resp, text)}}
 
