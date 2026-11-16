@@ -3,7 +3,8 @@
 A Claude Code plugin that keeps the desktop app's Code-tab sidebar tidy as a side effect of
 normal chat turns. No scheduled job.
 
-- **Pinned** holds only chats in progress: a new chat pins itself, a finished one unpins itself.
+- **Pinned** holds only chats in progress: a new chat pins itself, a finished one unpins itself,
+  and any chat you write in again pins itself and drops its `done: ` prefix.
 - **Sections:** a new chat files itself into the closest existing section.
 - **Finished chats** rename themselves `done: <title>` and mark themselves completed.
 - **Pick-ups:** a chat that continues work handed off by another chat (even one that chat
