@@ -1,0 +1,125 @@
+"""Note texts the hooks add to a chat, and the sweep plan rendering. Factual, short, under 900 chars."""
+
+CAP = 25
+TITLE_MAX = 70
+
+_SIDEBAR = "mcp__ccd_sidebar__"
+_SESSION = "mcp__ccd_session_mgmt__"
+
+
+def _load(*names):
+    return "If deferred, load them in one ToolSearch call: select:" + ",".join(names) + "."
+
+
+def first_turn_note(section_hints):
+    text = (
+        "tidy-chats (sidebar upkeep), first turn of this chat. Alongside your first tool calls: "
+        "get_session \"self\". If this chat picks up work another chat handed off and still nests "
+        "under it, detach_session \"self\" first. If it has no group, move_sessions [\"self\"] into "
+        "the closest existing section (list_sections; never create one). Then set_pinned \"self\" "
+        "true. Skip all of this for a routine run or a side session still nested under the chat "
+        "that started it (moving those fails). "
+        + _load(_SESSION + "get_session", _SESSION + "detach_session", _SIDEBAR + "list_sections",
+                _SIDEBAR + "move_sessions", _SIDEBAR + "set_pinned")
+        + " Don't mention this upkeep in your reply."
+    )
+    if section_hints:
+        text += " Sections the user chose for chats like this: " + "; ".join(section_hints) + "."
+    return text
+
+
+def finish_note():
+    return (
+        "tidy-chats: this turn finished with nothing waiting on the user. Before your closing "
+        "message: set_session_title \"self\" to \"done: \" plus the current title (skip if it "
+        "already starts with \"done: \" or \"handed off: \"), set_pinned \"self\" false, then "
+        "mark_completed \"self\". "
+        + _load(_SESSION + "set_session_title", _SIDEBAR + "set_pinned", _SIDEBAR + "mark_completed")
+        + " Don't mention this upkeep in your reply."
+    )
+
+
+def reopen_note():
+    return (
+        "tidy-chats: this chat was marked done and the user wrote again. Alongside your first "
+        "tool call: set_session_title \"self\" to the title without its \"done: \" prefix, and "
+        "set_pinned \"self\" true. "
+        + _load(_SESSION + "set_session_title", _SIDEBAR + "set_pinned")
+        + " Don't mention this upkeep in your reply."
+    )
+
+
+def missed_note(step):
+    if step == "finish":
+        body = ("this chat finished but its done steps were not seen: set_session_title \"self\" "
+                "to \"done: \" plus the title, set_pinned \"self\" false, mark_completed \"self\". "
+                + _load(_SESSION + "set_session_title", _SIDEBAR + "set_pinned",
+                        _SIDEBAR + "mark_completed"))
+    else:
+        body = ("this chat is not in a sidebar section yet: move_sessions [\"self\"] into the "
+                "closest existing section (list_sections), then set_pinned \"self\" true. Skip "
+                "both for a routine run or a nested side session. "
+                + _load(_SIDEBAR + "list_sections", _SIDEBAR + "move_sessions",
+                        _SIDEBAR + "set_pinned"))
+    return "tidy-chats: " + body + " No reply text needed."
+
+
+def sweep_note():
+    return (
+        "tidy-chats: a sidebar sweep is due and this chat holds the sweep lock. Call list_sessions "
+        "with limit 200. " + _load(_SESSION + "list_sessions")
+        + " Its output comes back as a short plan instead of the full list; do what the plan "
+        "says, then end with one short line of what changed."
+    )
+
+
+def _trim(title):
+    title = " ".join(str(title or "").split())
+    return title if len(title) <= TITLE_MAX else title[:TITLE_MAX - 1] + "…"
+
+
+def _items(rows, fmt):
+    lines = [fmt(r) for r in rows[:CAP]]
+    if len(rows) > CAP:
+        lines.append("+%d more next sweep" % (len(rows) - CAP))
+    return lines
+
+
+REASONS = {"finished": "finished, idle", "idle": "idle for days", "routine": "routine run"}
+
+
+def render_plan(plan, *, archive_mode, ideas_waiting, now):
+    checked = plan.get("checked", 0)
+    archive, unpin, file_ = plan.get("archive", []), plan.get("unpin", []), plan.get("file", [])
+    head = "tidy-chats sweep (%s): checked %d chats; the full list is not shown." % (
+        now.strftime("%Y-%m-%d %H:%M UTC"), checked)
+    out = [head]
+    if not (archive or unpin or file_):
+        out.append("Nothing to tidy.")
+    if archive:
+        if archive_mode == "ask":
+            out.append("Archive: ask the user one yes/no question (AskUserQuestion) to archive these "
+                       "%d chats; on yes, archive_session each one:" % len(archive))
+        else:
+            out.append("Archive with archive_session, one call each. Archiving is the user's tidy-chats "
+                       "setting (archive: auto), so don't ask. Archiving a chat also archives its "
+                       "idle nested chats:")
+        out += _items(archive, lambda a: '- %s "%s" (%s)' % (
+            a["id"], _trim(a.get("title")), REASONS.get(a.get("reason"), a.get("reason", ""))))
+    if unpin:
+        out.append("Unpin with set_pinned false:")
+        out += _items(unpin, lambda u: '- %s "%s"' % (u["id"], _trim(u.get("title"))))
+    if file_:
+        secs = ", ".join("%s (%s)" % (s.get("name"), s.get("id")) for s in plan.get("sections", []))
+        out.append("File with move_sessions into the closest existing section%s; skip any that fail:"
+                   % ((" (" + secs + ")") if secs else ""))
+        out += _items(file_, lambda f: '- %s "%s" in %s%s' % (
+            f["id"], _trim(f.get("title")), f.get("cwd") or "?",
+            (" → " + f["section"] + " (user rule)") if f.get("section") else ""))
+    if archive or unpin or file_:
+        out.append("Load the tools in one ToolSearch call if deferred.")
+    if ideas_waiting:
+        out.append('End your reply with: "tidy-chats has %d rule idea%s: run /tidy-chats:rules"'
+                   % (ideas_waiting, "" if ideas_waiting == 1 else "s"))
+    out.append("Do not list chats again; finish with one short line of what changed.")
+    return "\n".join(out)
