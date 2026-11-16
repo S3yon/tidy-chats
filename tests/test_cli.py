@@ -140,6 +140,13 @@ def test_usage_errors():
     assert cli.main(["nope"]) == 2
 
 
+def test_section_idea_cannot_be_scoped_to_one_chat(capsys):
+    state.save_ideas([idea(kind="section", target="local_z", title="Hero copy", cwd="/Users/u/site")])
+    assert cli.main(["accept", "1", "chat"]) == 2
+    assert "word:" in capsys.readouterr().out
+    assert state.load_rules() == [] and state.load_ideas()[0]["status"] == "pending"
+
+
 def test_status_shows_what_a_sweep_planned_with(capsys):
     state.log_action({"action": "sweep", "chat": "local_a", "checked": 9, "archive": 2, "unpin": 0,
                       "file": 1, "finished_idle_hours": 1.0, "sweep_hours": 2.0})

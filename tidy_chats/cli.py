@@ -134,6 +134,10 @@ def cmd_accept(args):
         print("No waiting rule idea #%s." % args[0])
         return 2
     scope = args[1]
+    if scope == "chat" and idea["kind"] == "section":
+        print("A section rule for one chat does nothing: that chat is already filed. "
+              "Use word:<word> or folder.")
+        return 2
     if scope == "chat":
         rule = {"kind": idea["kind"], "match": "session", "value": idea["target"]}
     elif scope.startswith("word:") and scope[5:].strip():

@@ -13,7 +13,7 @@ Nothing applies until the user says yes. Each idea came from the user reversing 
 
 1. No ideas waiting: say so in one line and stop.
 2. Ask with AskUserQuestion, one question per idea (up to 4 per call). Name the chat and what the user did. Options, recommended first:
-   - "Just this chat": scope `chat`
+   - "Just this chat": scope `chat` (not for a section idea: that chat is already filed)
    - "Every chat with \"<word>\"": scope `word:<word>`, using one distinctive word from the title (leave this out if no word fits)
    - For a section idea only, "Every chat in this folder": scope `folder`
    - "No": reject, and it is never raised again
