@@ -11,6 +11,7 @@ BIG_TRANSCRIPT = 4 * 1024 * 1024
 OVERDUE_FOR_BIG = 24 * 3600
 MAX_HINTS = 3
 SAMPLE_MAX = 4000
+FULL_LIST = 200
 
 
 def handle(event, payload, env, now):
@@ -185,14 +186,27 @@ def _post_tool(cid, payload, env, now):
                 st["parent"] = info.get("parentSessionId") if st["nested"] else None
                 st["pinned"] = bool(info.get("pinned"))
     elif short == "list_sessions":
-        out = _plan_swap(cid, resp, env, now, st.get("parent"))
+        out = _plan_swap(cid, inp, resp, env, now, st.get("parent"))
     state.save_chat(cid, st)
     return out
 
 
-def _plan_swap(cid, resp, env, now, parent=None):
+def _full_list_limit(inp):
+    """The limit of a list_sessions call that asked for the whole list, else None."""
+    if not isinstance(inp, dict) or "group" in inp or "linked" in inp:
+        return None
+    limit = inp.get("limit")
+    if isinstance(limit, bool) or not isinstance(limit, (int, float)) or limit < FULL_LIST:
+        return None
+    return int(limit)
+
+
+def _plan_swap(cid, inp, resp, env, now, parent=None):
     lock = state.sweep_state()["lock"]
     if not lock or lock.get("holder") != cid:
+        return {}
+    limit = _full_list_limit(inp)
+    if limit is None:
         return {}
     sessions = planner.parse_sessions(resp)
     if sessions is None:
@@ -201,6 +215,9 @@ def _plan_swap(cid, resp, env, now, parent=None):
     plan = planner.make_plan(sessions, now=datetime.fromtimestamp(now, timezone.utc), self_id=cid,
                              rules=state.load_rules(), log=state.read_log(), opts=opts,
                              self_parent=parent)
+    if len(sessions) >= limit:  # chats past the limit are unseen: their chains can't be judged
+        plan["archive"] = []
+        plan["truncated"] = limit
     waiting = _update_ideas(plan["overrides"], now)
     text = notes.render_plan(plan, archive_mode=opts["archive"], ideas_waiting=waiting,
                              now=datetime.fromtimestamp(now, timezone.utc))

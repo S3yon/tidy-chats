@@ -96,3 +96,9 @@ def test_first_turn_note_drops_hints_to_stay_short():
     t = notes.first_turn_note(hints)
     assert len(t) < 900
     assert "Website" in t
+
+
+def test_render_plan_says_when_list_hit_its_limit():
+    text = notes.render_plan(empty_plan(truncated=200), archive_mode="auto", ideas_waiting=0, now=NOW)
+    assert "limit of 200" in text
+    assert "limit" not in notes.render_plan(empty_plan(), archive_mode="auto", ideas_waiting=0, now=NOW)

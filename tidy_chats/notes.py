@@ -101,6 +101,9 @@ def render_plan(plan, *, archive_mode, ideas_waiting, now):
     head = "tidy-chats sweep (%s): checked %d chats; the full list is not shown." % (
         now.strftime("%Y-%m-%d %H:%M UTC"), checked)
     out = [head]
+    if plan.get("truncated"):
+        out.append("The list hit its limit of %d chats, so archiving waits for a sweep that sees "
+                   "every chat." % plan["truncated"])
     if not (archive or unpin or file_):
         out.append("Nothing to tidy.")
     if archive:

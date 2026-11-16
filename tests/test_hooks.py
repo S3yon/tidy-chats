@@ -277,9 +277,9 @@ def test_list_sessions_swapped_only_for_holder():
 def test_list_sessions_swap_mirrors_string_shape():
     settle_first_turn()
     stop()
-    out = tool("mcp__ccd_session_mgmt__list_sessions", {}, sessions_json())
+    out = tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200}, sessions_json())
     assert isinstance(out["hookSpecificOutput"]["updatedMCPToolOutput"], str)
-    out = tool("mcp__ccd_session_mgmt__list_sessions", {},
+    out = tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200},
                {"content": [{"type": "text", "text": sessions_json()}]})
     assert out["hookSpecificOutput"]["updatedMCPToolOutput"]["content"][0]["type"] == "text"
 
@@ -294,6 +294,27 @@ def test_nested_sweeper_keeps_its_parent_open():
     out = tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200}, json.dumps(without_me))
     text = out["hookSpecificOutput"]["updatedMCPToolOutput"]
     assert "local_old" not in text
+
+
+def test_list_sessions_swap_only_for_a_full_list():
+    settle_first_turn()
+    stop()  # takes the lock
+    for args in ({}, {"limit": 50}, {"limit": "lots"}, {"limit": 200, "linked": True},
+                 {"limit": 200, "group": "System"}):
+        assert tool("mcp__ccd_session_mgmt__list_sessions", args, sessions_json()) == {}, args
+
+
+def test_list_at_its_limit_holds_archives():
+    settle_first_turn()
+    stop()
+    rows = json.loads(sessions_json())
+    rows += [{"sessionId": "local_f%d" % i, "title": "Filler %d" % i, "cwd": "/w", "isArchived": False,
+              "isRunning": False, "lastActivityAt": iso(1), "group": {"id": "cg-1", "name": "System"}}
+             for i in range(200 - len(rows))]
+    out = tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200}, json.dumps(rows))
+    text = out["hookSpecificOutput"]["updatedMCPToolOutput"]
+    assert "archive_session" not in text and "local_old" not in text
+    assert "limit" in text
 
 
 def test_list_sessions_unparseable_passes_through():
@@ -324,7 +345,7 @@ def test_overrides_become_ideas_deduped():
     sessions[0]["pinned"] = True  # the user pinned it back
     for i in range(2):
         state.try_lock(ME, T0 + i)
-        tool("mcp__ccd_session_mgmt__list_sessions", {}, json.dumps(sessions), now=T0 + i)
+        tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200}, json.dumps(sessions), now=T0 + i)
         state.release_lock(ME, T0 + i)
     ideas = state.load_ideas()
     assert len(ideas) == 1
@@ -332,7 +353,7 @@ def test_overrides_become_ideas_deduped():
     assert ideas[0]["count"] == 1 and ideas[0]["status"] == "pending"
     state.log_action({"action": "unpin", "target": "local_old", "at": 2.0})
     state.try_lock(ME, T0 + 9)
-    out = tool("mcp__ccd_session_mgmt__list_sessions", {}, json.dumps(sessions), now=T0 + 9)
+    out = tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200}, json.dumps(sessions), now=T0 + 9)
     assert state.load_ideas()[0]["count"] == 2
     assert "1 rule idea" in out["hookSpecificOutput"]["updatedMCPToolOutput"]
 
@@ -345,7 +366,7 @@ def test_rejected_idea_not_raised_again():
     sessions = json.loads(sessions_json())
     sessions[0]["pinned"] = True
     state.try_lock(ME, T0)
-    out = tool("mcp__ccd_session_mgmt__list_sessions", {}, json.dumps(sessions))
+    out = tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200}, json.dumps(sessions))
     assert len(state.load_ideas()) == 1
     assert "rule idea" not in out["hookSpecificOutput"]["updatedMCPToolOutput"]
 
