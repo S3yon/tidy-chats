@@ -9,7 +9,7 @@
       "name": "tidy-chats",
       "source": "./",
       "description": "Keeps the desktop app's Code-tab sidebar tidy during normal chat turns: pins chats in progress, files them into sections, marks finished ones done and archives them, and learns from your undos.",
-      "version": "0.1.6"
+      "version": "0.1.7"
     }
   ]
 }
