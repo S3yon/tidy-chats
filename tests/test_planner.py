@@ -153,6 +153,12 @@ def test_missing_group_key_is_unknown_not_unfiled():
     assert [f["id"] for f in p["file"]] == ["loose"]
 
 
+def test_running_chats_never_unpinned_or_filed():
+    p = plan([chat("busy", "done: still going", pinned=True, isRunning=True),
+              chat("busy2", "Filing itself", group=None, isRunning=True)])
+    assert p["unpin"] == [] and p["file"] == []
+
+
 def test_section_rule_hint_on_file():
     rules = [{"kind": "section", "match": "cwd", "value": "/Users/u/site", "section": "Website"}]
     p = plan([chat("a", "Hero", group=None, cwd="/Users/u/site/app")], rules)

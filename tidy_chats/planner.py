@@ -161,15 +161,15 @@ def make_plan(sessions, *, now, self_id, rules, log, opts):
                if sid in chosen and not (_nested(c) and c["startedBy"] in chosen)]
 
     unpin = [{"id": sid, "title": c.get("title") or ""} for sid, c in by_id.items()
-             if c.get("pinned") and sid != self_id and is_finished_title(c.get("title"))
-             and not _any_rule(rules, "keep_pinned", c)]
+             if c.get("pinned") and sid != self_id and not c.get("isRunning")
+             and is_finished_title(c.get("title")) and not _any_rule(rules, "keep_pinned", c)]
 
     file_ = []
     for sid, c in by_id.items():
         # A missing group key means "not reported yet", not ungrouped (list_sessions doc).
         if "group" not in c or c["group"] is not None:
             continue
-        if _nested(c) or c.get("pinned") or sid == self_id or sid in chosen:
+        if _nested(c) or c.get("pinned") or c.get("isRunning") or sid == self_id or sid in chosen:
             continue
         item = {"id": sid, "title": c.get("title") or "", "cwd": c.get("cwd") or ""}
         hint = next((r.get("section") for r in rules
