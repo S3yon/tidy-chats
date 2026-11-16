@@ -204,6 +204,81 @@ def test_archive_logged_only_when_it_worked():
     assert [e["target"] for e in state.read_log() if e["action"] == "archive"] == ["local_a"]
 
 
+# --- pick-up chats and handing off ------------------------------------------
+
+PICKUP_PROMPT = ('Background (from the session that started this one): finish the battle helper.\n'
+                 'Task: Pick up "Puzzle app battle helper step 1, parts 7-8".\n'
+                 'first: rename session local_0a1b2c3d to "handed off: Pick up: Puzzle app" '
+                 '(skip if it already starts with "done: " or "handed off: "; do not archive it)')
+
+
+def test_pickup_prompt_gets_pickup_note():
+    note = ctx(run("UserPromptSubmit", {"prompt": PICKUP_PROMPT}))
+    for word in ("detach_session", "set_pinned", "move_sessions", "done: ", "set_session_title"):
+        assert word in note, word
+    assert "handed-off" in note
+    assert state.load_chat(ME)["pickup"] is True
+    assert len(note) < 900
+
+
+def test_pick_up_title_prompt_counts_as_pickup():
+    run("UserPromptSubmit", {"prompt": "Pick up: tidy-chats review fixes. Read the notes first."})
+    assert state.load_chat(ME)["pickup"] is True
+    run("UserPromptSubmit", {"prompt": 'Context first.\nPick up "example.com upgrade". Read the notes.'},
+        CLAUDE_CODE_HOST_SESSION_ID=OTHER)
+    assert state.load_chat(OTHER)["pickup"] is True
+
+
+def test_plain_first_prompt_is_not_a_pickup():
+    note = ctx(run("UserPromptSubmit", {"prompt": "Fix the deck page"}))
+    assert "first turn" in note and "handed-off" not in note
+    assert not state.load_chat(ME).get("pickup")
+
+
+def test_pickup_stop_reminds_once_when_still_nested():
+    state_sweep_recent()
+    run("UserPromptSubmit", {"prompt": PICKUP_PROMPT})
+    resp = json.dumps({"sessionId": ME, "group": {"id": "cg-1", "name": "S"},
+                       "parentSessionId": "local_p", "detached": False})
+    tool("mcp__ccd_session_mgmt__get_session", {"session_id": "self"}, resp)
+    note = ctx(stop())
+    assert "detach_session" in note and "set_pinned" in note
+    assert stop(now=T0 + 5) == {}
+
+
+def test_pickup_quiet_when_detached_filed_and_pinned():
+    state_sweep_recent()
+    run("UserPromptSubmit", {"prompt": PICKUP_PROMPT})
+    resp = json.dumps({"sessionId": ME, "group": {"id": "cg-1", "name": "S"},
+                       "parentSessionId": "local_p", "detached": False})
+    tool("mcp__ccd_session_mgmt__get_session", {"session_id": "self"}, resp)
+    tool("mcp__ccd_session_mgmt__detach_session", {"session_id": "self"})
+    tool("mcp__ccd_sidebar__set_pinned", {"session_id": "self", "pinned": True})
+    assert stop() == {}
+
+
+def test_handing_off_chat_keeps_its_pin():
+    state_sweep_recent()
+    settle_first_turn()
+    tool("mcp__ccd_session__start_session", {"title": "Pick up: tidy-chats", "prompt": "p"})
+    assert tool(WRAP, {"recap": "Handed off."}) == {}
+    assert stop() == {}
+
+
+def test_handed_off_flag_lasts_one_turn():
+    state_sweep_recent()
+    settle_first_turn()
+    tool("mcp__ccd_session__start_session", {"title": "Pick up: tidy-chats", "prompt": "p"})
+    run("UserPromptSubmit", {"prompt": "one more fix"})
+    assert "done: " in ctx(tool(WRAP, {"recap": "Fixed."}))
+
+
+def test_other_side_session_does_not_count_as_handoff():
+    settle_first_turn()
+    tool("mcp__ccd_session__start_session", {"title": "Fix the flaky test", "prompt": "p"})
+    assert "done: " in ctx(tool(WRAP, {"recap": "r"}))
+
+
 # --- Stop -------------------------------------------------------------------
 
 def test_stop_reminds_missed_finish_once():

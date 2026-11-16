@@ -1,6 +1,7 @@
 """Hook handlers: one per event. Each returns hook output JSON ({} when there is nothing to say)."""
 import json
 import os
+import re
 import time
 import traceback
 from datetime import datetime, timezone
@@ -12,6 +13,8 @@ OVERDUE_FOR_BIG = 24 * 3600
 MAX_HINTS = 3
 SAMPLE_MAX = 4000
 FULL_LIST = 200
+# A first prompt that picks up another chat's work: names a handoff, or a line starts "Pick up".
+PICKUP = re.compile(r"(?im)(\bhand(?:ed)?[- ]?offs?\b|^\W*pick up\b)")
 
 
 def handle(event, payload, env, now):
@@ -60,11 +63,13 @@ def _section_hints(cwd):
 def _prompt(cid, payload, now):
     st = state.load_chat(cid)
     if not st.get("seen"):
-        state.save_chat(cid, {"seen": 1, "started_at": now})
-        return _ctx("UserPromptSubmit", notes.first_turn_note(_section_hints(payload.get("cwd") or "")))
+        pickup = bool(PICKUP.search(str(payload.get("prompt") or "")))
+        state.save_chat(cid, {"seen": 1, "started_at": now, "pickup": pickup})
+        hints = _section_hints(payload.get("cwd") or "")
+        return _ctx("UserPromptSubmit", notes.pickup_note(hints) if pickup else notes.first_turn_note(hints))
     reopened = bool(st.get("done"))
     st.update({"finished": False, "waiting": False, "completed": False, "finish_reminded": False,
-               "wrapped_turn": False})
+               "wrapped_turn": False, "handed_off": False})
     if reopened:
         st["done"] = False
     state.save_chat(cid, st)
@@ -145,8 +150,12 @@ def _post_tool(cid, payload, env, now):
             st.update({"finished": False, "waiting": True})
         else:
             st.update({"finished": True, "waiting": False})
-            if not st.get("done"):
+            if not (st.get("done") or st.get("handed_off")):
                 out = _ctx("PostToolUse", notes.finish_note(_keep_pin(cid, st, payload)))
+    elif short == "start_session":
+        # Handing off: the chat keeps its pin until the pick-up chat unpins it (KB rule 2026-10-21).
+        if str(inp.get("title") or "").strip().lower().startswith("pick up"):
+            st["handed_off"] = True
     elif short == "set_session_title":
         t = target(inp.get("session_id"))
         done = planner.is_finished_title(inp.get("title"))
@@ -293,9 +302,15 @@ def _stop(cid, payload, env, now):
             st.update({"finished": True, "waiting": False})
 
     note = None
-    if st.get("finished") and not (st.get("done") or st.get("completed")) and not st.get("finish_reminded"):
+    if (st.get("finished") and not (st.get("done") or st.get("completed") or st.get("handed_off"))
+            and not st.get("finish_reminded")):
         st["finish_reminded"] = True
         note = notes.missed_note("finish", _keep_pin(cid, st, payload))
+    elif (st.get("pickup") and not st.get("pickup_reminded")
+          and (st.get("nested") is not False or not st.get("pinned"))):
+        st["pickup_reminded"] = True
+        st["first_turn_reminded"] = True  # the pick-up reminder covers filing too
+        note = notes.missed_note("pickup")
     elif (st.get("seen") and not st.get("filed") and not st.get("nested")
           and not st.get("first_turn_reminded")):
         st["first_turn_reminded"] = True

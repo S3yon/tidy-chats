@@ -18,11 +18,15 @@ def first_turn_note(section_hints):
         "under it, detach_session \"self\". If it has no group, move_sessions [\"self\"] into the "
         "closest existing section (list_sections; never create one). Then set_pinned \"self\" true; "
         "if the title starts with \"done: \", drop that prefix. Skip all this for a routine run or "
-        "a side session nested under the chat that started it. "
+        "a side session doing part of the work of the chat that started it (a pick-up is not one). "
         + _load(_SESSION + "get_session", _SESSION + "detach_session", _SIDEBAR + "list_sections",
                 _SIDEBAR + "move_sessions", _SIDEBAR + "set_pinned")
         + " Keep this out of your reply."
     )
+    return _with_hints(text, section_hints)
+
+
+def _with_hints(text, section_hints):
     kept = []
     for hint in section_hints:
         trial = text + " Sections the user chose for chats like this: " + "; ".join(kept + [hint]) + "."
@@ -32,6 +36,23 @@ def first_turn_note(section_hints):
     if kept:
         text += " Sections the user chose for chats like this: " + "; ".join(kept) + "."
     return text
+
+
+_PICKUP_TOOLS = (_SESSION + "get_session", _SESSION + "set_session_title", _SESSION + "detach_session",
+                 _SIDEBAR + "list_sections", _SIDEBAR + "move_sessions", _SIDEBAR + "set_pinned")
+
+
+def pickup_note(section_hints):
+    text = (
+        "tidy-chats: this first prompt looks like a pick-up of a handed-off chat. If it is, before "
+        "the task: set_session_title that chat to \"done: \" plus its title (always \"done: \", "
+        "whatever the prompt says; drop a \"handed off: \" prefix) and set_pinned it false. "
+        "get_session \"self\"; if it has a parentSessionId and isn't detached, detach_session "
+        "\"self\", even as a side session. If it has no group, move_sessions [\"self\"] into that "
+        "chat's section, else the closest (list_sections). Then set_pinned \"self\" true. That chat is parentSessionId or the one "
+        "the prompt names. " + _load(*_PICKUP_TOOLS) + " Keep this out of your reply."
+    )
+    return _with_hints(text, section_hints)
 
 
 def _finish_tools(keep_pin):
@@ -67,6 +88,12 @@ def missed_note(step, keep_pin=False):
         unpin, load = _finish_tools(keep_pin)
         body = ("this chat finished but its done steps were not seen: set_session_title \"self\" "
                 "to \"done: \" plus the title, " + unpin + "mark_completed \"self\". " + load)
+    elif step == "pickup":
+        body = ("this pick-up chat's steps were not all seen: rename the chat that handed off "
+                "\"done: \" plus its title and set_pinned it false; detach_session \"self\" if it "
+                "still nests under that chat; if it has no group, move_sessions [\"self\"] into a "
+                "section; set_pinned \"self\" true. Skip what is already done. "
+                + _load(*_PICKUP_TOOLS))
     else:
         body = ("this chat's first-turn filing was not seen: get_session \"self\"; if it has no "
                 "group, move_sessions [\"self\"] into the closest existing section (list_sections); "

@@ -115,3 +115,13 @@ def test_first_turn_reminder_checks_before_filing():
     text = notes.missed_note("first_turn")
     assert "get_session" in text and "if it has no group" in text
     assert "is not in a sidebar section" not in text
+
+
+def test_first_turn_skip_clause_excludes_pickups():
+    assert "a pick-up is not one" in notes.first_turn_note([])
+
+
+def test_pickup_notes_short_with_hints():
+    hints = ["Website for /Users/u/site"] * 3
+    for text in (notes.pickup_note(hints), notes.missed_note("pickup")):
+        assert len(text) < 900 and "tidy-chats" in text and "detach_session" in text
