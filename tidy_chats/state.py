@@ -114,11 +114,33 @@ def try_lock(holder, now):
         os.rename(str(path), str(aside))
     except OSError:
         return False
+    moved = _read_lock(aside)
+    if not moved or (moved.get("holder"), moved.get("at")) != (cur.get("holder"), cur.get("at")):
+        _put_back(aside, path)  # another chat took the stale lock first; what moved is its fresh one
+        return False
     try:
         os.unlink(str(aside))
     except OSError:
         pass
     return _create_lock(path, holder, now)
+
+
+def _put_back(aside, path):
+    try:
+        os.link(str(aside), str(path))  # fails if a lock exists again: never overwrite one
+    except FileExistsError:
+        pass
+    except OSError:
+        if not path.exists():
+            try:
+                os.rename(str(aside), str(path))
+                return
+            except OSError:
+                pass
+    try:
+        os.unlink(str(aside))
+    except OSError:
+        pass
 
 
 def release_lock(holder, now):

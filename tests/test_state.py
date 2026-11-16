@@ -111,3 +111,20 @@ def test_retaking_a_held_lock_refreshes_its_time():
     assert state.try_lock("local_a", 2000.0) is True
     assert state.sweep_state()["lock"]["at"] == 2000.0
     assert state.try_lock("local_b", 2000.0 + 1199) is False  # not stale: the holder renewed it
+
+
+def test_stale_takeover_never_moves_a_fresh_lock_aside(monkeypatch):
+    """Another chat takes the stale lock between this chat's check and its move."""
+    assert state.try_lock("local_a", 1000.0) is True
+    real = state._read_lock
+
+    def racing(path):
+        cur = real(path)  # local_a's lock, stale at 3000
+        monkeypatch.setattr(state, "_read_lock", real)
+        path.unlink()
+        assert state._create_lock(path, "local_c", 3000.0)  # local_c wins the race first
+        return cur
+
+    monkeypatch.setattr(state, "_read_lock", racing)
+    assert state.try_lock("local_b", 3000.0) is False
+    assert state.sweep_state()["lock"]["holder"] == "local_c"
