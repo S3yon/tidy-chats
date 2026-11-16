@@ -1,0 +1,12 @@
+[
+ {"sessionId": "local_self", "title": "Fix the deck page", "cwd": "/Users/u/projects/site", "isArchived": false, "isRunning": true, "lastActivityAt": "2026-11-15T11:59:00.000Z", "group": {"id": "cg-sys", "name": "System"}, "pinned": true},
+ {"sessionId": "local_done_old", "title": "done: Write the README", "cwd": "/Users/u/projects/kb", "isArchived": false, "isRunning": false, "lastActivityAt": "2026-11-13T09:00:00.000Z", "group": {"id": "cg-sys", "name": "System"}, "pinned": false},
+ {"sessionId": "local_done_new", "title": "done: Rename files", "cwd": "/Users/u/projects/kb", "isArchived": false, "isRunning": false, "lastActivityAt": "2026-11-15T10:00:00.000Z", "group": {"id": "cg-sys", "name": "System"}, "pinned": false},
+ {"sessionId": "local_handed", "title": "handed off: Job scan", "cwd": "/Users/u/projects/kb", "isArchived": false, "isRunning": false, "lastActivityAt": "2026-11-12T09:00:00.000Z", "group": {"id": "cg-jobs", "name": "Jobs"}, "pinned": true},
+ {"sessionId": "local_parent", "title": "done: Atlas v13", "cwd": "/Users/u/projects/kb", "isArchived": false, "isRunning": false, "lastActivityAt": "2026-11-10T09:00:00.000Z", "group": {"id": "cg-jobs", "name": "Jobs"}, "pinned": false},
+ {"sessionId": "local_child", "title": "Atlas v14 pace", "cwd": "/Users/u/projects/kb", "isArchived": false, "isRunning": false, "lastActivityAt": "2026-11-15T08:00:00.000Z", "pinned": false, "name": "v14", "startedBy": "local_parent"},
+ {"sessionId": "local_unfiled", "title": "Plan the trip", "cwd": "/Users/u/projects/kb/life", "isArchived": false, "isRunning": false, "lastActivityAt": "2026-11-15T07:00:00.000Z"},
+ {"sessionId": "local_routine", "title": "Daily X scan", "cwd": "/Users/u/projects/kb", "isArchived": false, "isRunning": false, "lastActivityAt": "2026-11-15T09:00:00.000Z", "group": {"id": "cg-sys", "name": "System"}},
+ {"sessionId": "local_stale", "title": "Old idea", "cwd": "/Users/u/projects/kb", "isArchived": false, "isRunning": false, "lastActivityAt": "2026-10-20T09:00:00.000Z", "group": {"id": "cg-life", "name": "Life"}, "pinned": false},
+ {"sessionId": "local_nots", "title": "done: no timestamp", "cwd": "/Users/u/projects/kb", "isArchived": false, "isRunning": false, "group": {"id": "cg-sys", "name": "System"}}
+]
