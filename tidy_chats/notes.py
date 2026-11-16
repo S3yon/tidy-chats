@@ -15,16 +15,22 @@ def first_turn_note(section_hints):
     text = (
         "tidy-chats (sidebar upkeep), first turn of this chat. Alongside your first tool calls: "
         "get_session \"self\". If this chat picks up work another chat handed off and still nests "
-        "under it, detach_session \"self\" first. If it has no group, move_sessions [\"self\"] into "
-        "the closest existing section (list_sections; never create one). Then set_pinned \"self\" "
-        "true. Skip all of this for a routine run or a side session still nested under the chat "
-        "that started it (moving those fails). "
+        "under it, detach_session \"self\". If it has no group, move_sessions [\"self\"] into the "
+        "closest existing section (list_sections; never create one). Then set_pinned \"self\" true; "
+        "if the title starts with \"done: \", drop that prefix. Skip all this for a routine run or "
+        "a side session nested under the chat that started it. "
         + _load(_SESSION + "get_session", _SESSION + "detach_session", _SIDEBAR + "list_sections",
                 _SIDEBAR + "move_sessions", _SIDEBAR + "set_pinned")
-        + " Don't mention this upkeep in your reply."
+        + " Keep this out of your reply."
     )
-    if section_hints:
-        text += " Sections the user chose for chats like this: " + "; ".join(section_hints) + "."
+    kept = []
+    for hint in section_hints:
+        trial = text + " Sections the user chose for chats like this: " + "; ".join(kept + [hint]) + "."
+        if len(trial) >= 900:
+            break
+        kept.append(hint)
+    if kept:
+        text += " Sections the user chose for chats like this: " + "; ".join(kept) + "."
     return text
 
 
@@ -42,7 +48,8 @@ def finish_note():
 def reopen_note():
     return (
         "tidy-chats: this chat was marked done and the user wrote again. Alongside your first "
-        "tool call: set_session_title \"self\" to the title without its \"done: \" prefix, and "
+        "tool call: set_session_title \"self\" to the title without its \"done: \" or \"handed "
+        "off: \" prefix, and "
         "set_pinned \"self\" true. "
         + _load(_SESSION + "set_session_title", _SIDEBAR + "set_pinned")
         + " Don't mention this upkeep in your reply."

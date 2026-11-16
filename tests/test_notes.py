@@ -89,3 +89,10 @@ def test_render_plan_trims_long_titles():
     p = empty_plan(unpin=[{"id": "x", "title": "done: " + "y" * 300}])
     t = notes.render_plan(p, archive_mode="auto", ideas_waiting=0, now=NOW)
     assert "y" * 300 not in t
+
+
+def test_first_turn_note_drops_hints_to_stay_short():
+    hints = ["Website (folder /Users/someone/projects/a-long-site-folder-name)"] * 5
+    t = notes.first_turn_note(hints)
+    assert len(t) < 900
+    assert "Website" in t
