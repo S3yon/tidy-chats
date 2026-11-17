@@ -69,6 +69,17 @@ def _pending():
     return [i for i in state.load_ideas() if i.get("status") == "pending"]
 
 
+def _held_line(sweep):
+    if not sweep["held"]:
+        return "Held back: none"
+    secs = sorted((sweep.get("held_sections") or {}).items(), key=lambda kv: -kv[1])
+    n, by = sweep["held"], sweep.get("held_by", 0)
+    where = (" (" + ", ".join("%s %d" % kv for kv in secs) + ")") if secs else ""
+    return ("Held back: %d finished chat%s wait on %d open chat%s they started%s. They go when "
+            "those finish or pass the idle limit; pinned ones stay." % (
+                n, "" if n == 1 else "s", by, "" if by == 1 else "s", where))
+
+
 def cmd_status(args):
     now = time.time()
     ss = state.sweep_state()
@@ -80,6 +91,10 @@ def cmd_status(args):
         span = _ago(min(due, now), max(due, now))[:-len(" ago")]
         print("Next sweep: %s (every %g h; a chat's Stop starts it)"
               % (("overdue by " if due <= now else "due in ") + span, hours))
+    last = next((e for e in reversed(state.read_log())
+                 if e.get("action") == "sweep" and isinstance(e.get("held"), int)), None)
+    if last:
+        print(_held_line(last))
     lock = ss["lock"]
     print("Sweep lock: %s" % ("held by %s since %s" % (lock.get("holder"), _ago(lock["at"], now))
                               if lock else "free"))

@@ -168,3 +168,20 @@ def test_status_says_when_a_sweep_is_overdue(capsys):
     state.release_lock("local_a", now - 1800)
     cli.main(["status"])
     assert "Next sweep: due in 1 h" in capsys.readouterr().out
+
+
+def test_status_says_how_many_finished_chats_wait_on_open_ones(capsys):
+    # Why does a section hold so many chats? Status answers it.
+    state.log_action({"action": "sweep", "chat": "local_a", "checked": 69, "archive": 11, "unpin": 0,
+                      "file": 1, "finished_idle_hours": 1.0, "sweep_hours": 2.0, "held": 26,
+                      "held_by": 12, "held_sections": {"Video & web": 26}})
+    cli.main(["status"])
+    out = capsys.readouterr().out
+    assert "Held back: 26 finished chats wait on 12 open chats they started (Video & web 26)" in out
+
+
+def test_status_has_no_held_line_for_an_old_sweep_record(capsys):
+    state.log_action({"action": "sweep", "chat": "local_a", "checked": 9, "archive": 2, "unpin": 0,
+                      "file": 1})
+    cli.main(["status"])
+    assert "Held back" not in capsys.readouterr().out
