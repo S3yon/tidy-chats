@@ -50,7 +50,7 @@ Set when the plugin is enabled, or later in `/config`.
 | `finished_idle_hours` | 24 | Archive `done:` / `handed off:` chats after this many idle hours |
 | `idle_days` | 14 | Archive any chat idle this many days |
 | `archive` | `auto` | `auto` archives in the sweep; `ask` asks one yes/no question first |
-| `routine_titles` | empty | Regex for routine run titles: archived after 1 h idle |
+| `routine_titles` | empty | Regex for routine run titles: archived after 1 h idle, never filed |
 
 ## Skills
 - `/tidy-chats:tidy`: sweep now instead of waiting.
@@ -80,7 +80,7 @@ State lives in the plugin data folder (`${CLAUDE_PLUGIN_DATA}`); `TIDY_CHATS_DAT
 `keeper.py debug on` saves samples of the sidebar tool calls to `samples/` there.
 
 ## Status
-v0.1.8: running live in the desktop app since 2026-11-16. Seen working in real chats: the
+v0.1.9: running live in the desktop app since 2026-11-16. Seen working in real chats: the
 first-turn and pick-up notes (a pick-up renamed the old chat `done: `, unpinned it, detached,
 filed and pinned itself before its first reply), the finish steps, and a sweep from a Stop
 (107 chats checked: 1 archived, 1 unpinned). The live run found three bugs, each fixed
@@ -91,6 +91,8 @@ declined calls, rule ideas) and logs the options each sweep planned with. 0.1.6:
 no longer gets a false "steps missed" note at its last turn, which had used up the turn a
 sweep was due on. 0.1.7: status says when the next sweep is due or how late it is. 0.1.8:
 status says how many finished chats wait on an open chat they started, and in which sections.
+0.1.9: a sweep no longer plans a section move for a routine run (the app keeps scheduled
+runs under their task and refuses the move).
 
 ## License
 MIT
