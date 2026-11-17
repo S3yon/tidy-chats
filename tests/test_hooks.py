@@ -723,3 +723,18 @@ def test_sweep_log_records_the_options_it_planned_with():
          CLAUDE_PLUGIN_OPTION_FINISHED_IDLE_HOURS="1", CLAUDE_PLUGIN_OPTION_SWEEP_HOURS="2")
     sweep = [e for e in state.read_log() if e["action"] == "sweep"][-1]
     assert sweep["finished_idle_hours"] == 1.0 and sweep["sweep_hours"] == 2.0
+
+
+def test_sweep_log_counts_finished_chats_held_by_an_open_one():
+    settle_first_turn()
+    stop()
+    rows = json.loads(sessions_json()) + [
+        {"sessionId": "local_top", "title": "handed off: v10", "cwd": "/w", "isArchived": False,
+         "isRunning": False, "lastActivityAt": iso(99), "group": {"id": "cg-v", "name": "Video & web"}},
+        {"sessionId": "local_tail", "title": "Pick up: v11", "cwd": "/w", "isArchived": False,
+         "isRunning": False, "lastActivityAt": iso(30), "startedBy": "local_top", "pinned": True,
+         "group": {"id": "cg-v", "name": "Video & web"}}]
+    tool("mcp__ccd_session_mgmt__list_sessions", {"limit": 200}, json.dumps(rows))
+    sweep = [e for e in state.read_log() if e["action"] == "sweep"][-1]
+    assert sweep["held"] == 1 and sweep["held_by"] == 1
+    assert sweep["held_sections"] == {"Video & web": 1}

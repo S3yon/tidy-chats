@@ -361,9 +361,19 @@ def _plan_swap(cid, inp, resp, env, now, parent=None):
     state.log_action({"action": "sweep", "chat": cid, "checked": plan["checked"],
                       "archive": len(plan["archive"]), "unpin": len(plan["unpin"]),
                       "file": len(plan["file"]), "finished_idle_hours": opts["finished_idle_hours"],
-                      "sweep_hours": opts["sweep_hours"]})
+                      "sweep_hours": opts["sweep_hours"], **_held_counts(plan["held"])})
     return {"hookSpecificOutput": {"hookEventName": "PostToolUse",
                                    "updatedMCPToolOutput": _mirror(resp, text)}}
+
+
+def _held_counts(held):
+    """Finished chats a sweep left because a chat they started is still open, for status."""
+    sections = {}
+    for h in held:
+        name = h.get("section") or "no section"
+        sections[name] = sections.get(name, 0) + 1
+    return {"held": len(held), "held_by": len({k for h in held for k in h.get("by", [])}),
+            "held_sections": sections}
 
 
 def _update_ideas(overrides, now):
