@@ -159,6 +159,20 @@ def make_plan(sessions, *, now, self_id, rules, log, opts, self_parent=None):
                 chosen.add(sid)
                 changed = True
 
+    def holders(sid, seen):
+        """The open chats under sid that keep it from being archived."""
+        out = []
+        for k in kids.get(sid, []):
+            if k in chosen or k in seen:
+                continue
+            out += holders(k, seen | {k}) if reasons.get(k) else [k]
+        return out
+
+    held = [{"id": sid, "title": c.get("title") or "",
+             "section": (c.get("group") or {}).get("name") or "",
+             "by": list(dict.fromkeys(holders(sid, {sid})))}
+            for sid, c in by_id.items() if reasons[sid] and sid not in chosen]
+
     archive = [{"id": sid, "title": c.get("title") or "", "reason": reasons[sid]}
                for sid, c in by_id.items()
                if sid in chosen and not (_nested(c) and c["startedBy"] in chosen)]
@@ -189,7 +203,7 @@ def make_plan(sessions, *, now, self_id, rules, log, opts, self_parent=None):
             seen_groups.add(g["id"])
             sections.append({"id": g["id"], "name": g.get("name") or ""})
 
-    return {"archive": archive, "unpin": unpin, "file": file_, "sections": sections,
+    return {"archive": archive, "unpin": unpin, "file": file_, "sections": sections, "held": held,
             "overrides": find_overrides(by_id, log or []), "checked": len(live)}
 
 

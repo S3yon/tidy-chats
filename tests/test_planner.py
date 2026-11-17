@@ -81,6 +81,35 @@ def test_nested_archivable_under_open_parent_listed_itself():
     assert archived_ids(p) == ["kid"]
 
 
+def test_held_lists_finished_chats_waiting_on_an_open_chat():
+    # A section showed 26 finished chats left open behind 12 open ones and nothing said why.
+    vw = {"id": "cg-v", "name": "Video & web"}
+    p = plan([chat("top", "handed off: v10", hours=99, group=vw),
+              chat("mid", "done: v13", hours=50, startedBy="top", group=vw),
+              chat("tail", "Pick up: v14 pace", hours=30, startedBy="mid", pinned=True, group=vw),
+              chat("solo", "done: side", hours=40),
+              chat("kid", "Still going", hours=2, startedBy="solo"),
+              chat("free", "done: other", hours=30)])
+    assert archived_ids(p) == ["free"]
+    held = {h["id"]: h for h in p["held"]}
+    assert set(held) == {"top", "mid", "solo"}
+    assert held["top"]["by"] == ["tail"] and held["mid"]["by"] == ["tail"]
+    assert held["solo"]["by"] == ["kid"]
+    assert held["top"]["section"] == "Video & web" and held["solo"]["section"] == "System"
+
+
+def test_nothing_held_when_the_chain_is_free():
+    p = plan([chat("top", "done: one", hours=99), chat("leaf", "done: two", hours=30, startedBy="top")])
+    assert p["held"] == []
+
+
+def test_held_survives_a_child_loop():
+    p = plan([chat("a", "done: a", hours=99, startedBy="b"), chat("b", "done: b", hours=99, startedBy="a"),
+              chat("c", "Open", hours=1, startedBy="b")])
+    assert {h["id"] for h in p["held"]} == {"a", "b"}
+    assert all(h["by"] == ["c"] for h in p["held"])
+
+
 def test_idle_14_days():
     p = plan([chat("old", "Old idea", hours=24 * 14 + 1), chat("new", "New idea", hours=24 * 13)])
     assert archived_ids(p) == ["old"]
