@@ -46,7 +46,8 @@ def test_hook_commands_run_from_the_plugin_root():
 def test_plugin_json_options_match_config_defaults():
     p = load(".claude-plugin/plugin.json")
     assert p["name"] == "tidy-chats"
-    assert p["version"] == "0.1.7"
+    market = load(".claude-plugin/marketplace.json")["plugins"][0]
+    assert p["version"] == market["version"]  # bumped together, never one alone
     assert p["author"]["name"] == "Seyon Sri"
     assert p["license"] == "MIT"
     opts = p["userConfig"]
