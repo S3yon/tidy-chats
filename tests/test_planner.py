@@ -202,6 +202,15 @@ def test_unfiled_top_level_only():
     assert p["file"][0]["cwd"] == "/w"
 
 
+def test_routine_runs_never_filed():
+    # A scheduled run shows under its task; the app refuses to move it into a section.
+    sessions = [chat("run", "Weekday SLATE check", hours=0.5, group=None),
+                chat("loose", "Loose", hours=0.5, group=None)]
+    assert [f["id"] for f in plan(sessions)["file"]] == ["run", "loose"]  # no regex set
+    p = plan(sessions, routine_titles=r"^Weekday SLATE check")
+    assert [f["id"] for f in p["file"]] == ["loose"]
+
+
 def test_missing_group_key_is_unknown_not_unfiled():
     no_key = chat("nokey", "No key")
     del no_key["group"]

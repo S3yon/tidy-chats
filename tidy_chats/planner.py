@@ -189,6 +189,9 @@ def make_plan(sessions, *, now, self_id, rules, log, opts, self_parent=None):
             continue
         if _nested(c) or c.get("pinned") or c.get("isRunning") or sid == self_id or sid in chosen:
             continue
+        # Scheduled runs show under their task and the app refuses to group them.
+        if routine is not None and routine.search(c.get("title") or ""):
+            continue
         item = {"id": sid, "title": c.get("title") or "", "cwd": c.get("cwd") or ""}
         hint = next((r.get("section") for r in rules
                      if r.get("kind") == "section" and r.get("section") and rule_matches(r, c)), None)
